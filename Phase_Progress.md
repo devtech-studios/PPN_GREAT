@@ -23,15 +23,15 @@
 
 ### วัน 1: Foundation
 
-- [ ] Setup Laravel Project + .env
-- [ ] ตั้งค่า CORS สำหรับ Flutter Web
-- [ ] ติดตั้ง JWT Auth (tymon/jwt-auth)
-- [ ] สร้าง Migration 26 ตาราง → รัน migrate สำเร็จ
-- [ ] สร้าง Seeder (Super Admin user)
-- [ ] API: POST /api/auth/login ✅
-- [ ] API: POST /api/auth/logout ✅
-- [ ] API: GET /api/auth/me ✅
-- [ ] ทดสอบ Login ด้วย Postman/Thunder Client
+- [x] Setup Laravel Project + .env
+- [x] ตั้งค่า CORS สำหรับ Flutter Web
+- [x] ติดตั้ง JWT Auth (tymon/jwt-auth)
+- [x] สร้าง Migration 26 ตาราง → รัน migrate สำเร็จ
+- [x] สร้าง Seeder (Super Admin user)
+- [x] API: POST /api/auth/login ✅
+- [x] API: POST /api/auth/logout ✅
+- [x] API: GET /api/auth/me ✅
+- [x] ทดสอบ Login ด้วย Postman/Thunder Client
 
 ### วัน 2: Core — Customers + Projects
 
@@ -262,7 +262,7 @@ Phase 4 (100%): ░░░░░░░░░░░░░░░░░░░░░�
 
 | Phase | Status | วันที่เริ่ม | วันที่เสร็จ | Approved by |
 |-------|--------|-----------|-----------|-------------|
-| Phase 1 (25%) | ⬜ ยังไม่เริ่ม | - | - | - |
+| Phase 1 (25%) | 🔄 กำลังดำเนินการ | 4 ก.ค. 2026 | - | - |
 | Phase 2 (50%) | ⬜ ยังไม่เริ่ม | - | - | - |
 | Phase 3 (75%) | ⬜ ยังไม่เริ่ม | - | - | - |
 | Phase 4 (100%) | ⬜ ยังไม่เริ่ม | - | - | - |
