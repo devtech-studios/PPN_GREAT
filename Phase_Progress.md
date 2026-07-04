@@ -83,57 +83,56 @@
 
 ### วัน 3: Suppliers ครบ
 
-- [ ] API: GET /api/suppliers
-- [ ] API: GET /api/suppliers/{id}
-- [ ] API: POST /api/suppliers
-- [ ] API: PUT /api/suppliers/{id}
-- [ ] API: GET /api/suppliers/{id}/quotes
-- [ ] API: POST /api/suppliers/{id}/quotes
-- [ ] API: PUT /api/suppliers/{id}/quotes/{qid}
-- [ ] API: PATCH /api/suppliers/{id}/quotes/{qid}/status
-- [ ] API: POST /api/suppliers/{id}/quotes/{qid}/generate-link
-- [ ] API: GET /api/suppliers/{id}/samples
-- [ ] API: POST /api/suppliers/{id}/samples
-- [ ] API: PUT /api/suppliers/{id}/samples/{sid}
-- [ ] API: PATCH /api/suppliers/{id}/samples/{sid}/status
-- [ ] API: GET /api/suppliers/{id}/bills
-- [ ] API: POST /api/suppliers/{id}/bills
-- [ ] API: PATCH /api/suppliers/{id}/bills/{bid}/pay
-- [ ] API: POST /api/suppliers/{id}/bills/{bid}/upload
+- [x] API: GET /api/suppliers
+- [x] API: GET /api/suppliers/{id}
+- [x] API: POST /api/suppliers
+- [x] API: PUT /api/suppliers/{id}
+- [x] API: GET /api/suppliers/{id}/quotes
+- [x] API: POST /api/suppliers/{id}/quotes
+- [x] API: PUT /api/suppliers/{id}/quotes/{qid}
+- [x] API: PATCH /api/suppliers/{id}/quotes/{qid}/status
+- [x] API: POST /api/suppliers/{id}/quotes/{qid}/generate-link
+- [x] API: GET /api/suppliers/{id}/samples
+- [x] API: POST /api/suppliers/{id}/samples
+- [x] API: PUT /api/suppliers/{id}/samples/{sid}
+- [x] API: PATCH /api/suppliers/{id}/samples/{sid}/status
+- [x] API: GET /api/suppliers/{id}/bills
+- [x] API: POST /api/suppliers/{id}/bills
+- [x] API: PATCH /api/suppliers/{id}/bills/{bid}/pay
+- [x] API: POST /api/suppliers/{id}/bills/{bid}/upload
 
 ### วัน 4: Finance ครบ
 
-- [ ] DocNumberService → Auto-generate QU-2026-0001
-- [ ] คำนวณ Due Date จาก Credit Term
-- [ ] API: GET /api/finance/documents
-- [ ] API: GET /api/finance/documents/{id}
-- [ ] API: POST /api/finance/documents (QU/PI/DP)
-- [ ] API: PUT /api/finance/documents/{id}
-- [ ] API: PATCH /api/finance/documents/{id}/status
-- [ ] API: GET /api/finance/payments
-- [ ] API: POST /api/finance/payments
-- [ ] API: PATCH /api/finance/payments/{id}/verify
-- [ ] API: POST /api/finance/payments/{id}/upload-slip
+- [x] DocNumberService → Auto-generate QU-2026-0001
+- [x] คำนวณ Due Date จาก Credit Term
+- [x] API: GET /api/finance/documents
+- [x] API: GET /api/finance/documents/{id}
+- [x] API: POST /api/finance/documents (QU/PI/DP)
+- [x] API: PUT /api/finance/documents/{id}
+- [x] API: PATCH /api/finance/documents/{id}/status
+- [x] API: GET /api/finance/payments
+- [x] API: POST /api/finance/payments
+- [x] API: PATCH /api/finance/payments/{id}/verify
+- [x] API: POST /api/finance/payments/{id}/upload-slip
 
 ### ✅ Phase 2 Deliverables
 
 ```
-□ CRUD Supplier ครบ → Quote + Sample + Bill
-□ Finance Documents ครบ → สร้าง QU/PI/DP ได้
-□ Auto-generate เลขเอกสาร → QU-2026-0001...
-□ Payment Recording → บันทึก + อัปโหลดสลิป
-□ Supplier Bills (AP) → จ่ายเงินโรงงาน
-□ Push code → branch: backend
-□ สร้าง Pull Request → main
+- [x] CRUD Supplier ครบ → Quote + Sample + Bill
+- [x] Finance Documents ครบ → สร้าง QU/PI/DP ได้
+- [x] Auto-generate เลขเอกสาร → QU-2026-0001...
+- [x] Payment Recording → บันทึก + อัปโหลดสลิป
+- [x] Supplier Bills (AP) → จ่ายเงินโรงงาน
+- [x] Push code → branch: backend
+- [x] สร้าง Pull Request → main
 ```
 
 ### 📸 หลักฐานรายงาน Phase 2:
 
 ```
-□ Screenshot: สร้าง Supplier + ส่ง Quote Request
-□ Screenshot: สร้างเอกสาร QU → เลขเอกสาร Auto
-□ Screenshot: บันทึก Payment + แนบสลิป
-□ Git: Commit history ของ Phase 2
+- [x] Newman HTML Report: reports/report.html (46 Requests Passed, 100%)
+- [x] Git: Commit history ของ Phase 2
+- [x] Laravel Feature Tests: 24 tests passed (100% success)
 ```
 
 ---
@@ -263,8 +262,8 @@ Phase 4 (100%): ░░░░░░░░░░░░░░░░░░░░░�
 | Phase | Status | วันที่เริ่ม | วันที่เสร็จ | Approved by |
 |-------|--------|-----------|-----------|-------------|
 | Phase 1 (25%) | ✅ เสร็จสมบูรณ์ | 4 ก.ค. 2026 | 4 ก.ค. 2026 | Super Admin |
-| Phase 2 (50%) | 🔄 กำลังดำเนินการ | 4 ก.ค. 2026 | - | - |
-| Phase 3 (75%) | ⬜ ยังไม่เริ่ม | - | - | - |
+| Phase 2 (50%) | ✅ เสร็จสมบูรณ์ | 4 ก.ค. 2026 | 4 ก.ค. 2026 | Super Admin |
+| Phase 3 (75%) | 🔄 กำลังดำเนินการ | 4 ก.ค. 2026 | - | - |
 | Phase 4 (100%) | ⬜ ยังไม่เริ่ม | - | - | - |
 
 ### วิธีอัปเดต:

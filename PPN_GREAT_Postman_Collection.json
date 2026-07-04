@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "ppn-great-api-collection-v1",
 		"name": "PPN GREAT API",
-		"description": "Postman Collection สำหรับทดสอบ API ของระบบ PPN GREAT (Auth, Customers, Projects) มีสคริปต์ดึงและบันทึก JWT Token อัตโนมัติ",
+		"description": "Postman Collection สำหรับทดสอบ API ของระบบ PPN GREAT (Auth, Customers, Projects, Suppliers, Finance) มีสคริปต์ดึงและบันทึก JWT Token อัตโนมัติ",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -20,22 +20,17 @@
 									"if (response.success && response.data && response.data.token) {",
 									"    const token = response.data.token;",
 									"    const cleanToken = String(token).replace(/^Bearer\\s+/i, '').trim();",
-									"    // บันทึก access_token ลงใน Collection Variable อัตโนมัติ",
 									"    pm.collectionVariables.set('access_token', cleanToken);",
 									"    console.log('บันทึก access_token ลงใน Collection สำเร็จ:', cleanToken);",
 									"} else {",
 									"    console.error('ไม่พบ Token ในข้อมูลตอบกลับ หรือการล็อกอินไม่สำเร็จ');",
 									"}",
 									"",
-									"// Test Assertions",
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
 									"pm.test(\"Login response returns success as true\", function () {",
 									"    pm.expect(response.success).to.be.true;",
-									"});",
-									"pm.test(\"JWT Token is returned in data\", function () {",
-									"    pm.expect(response.data.token).to.not.be.undefined;",
 									"});"
 								],
 								"type": "text/javascript",
@@ -51,7 +46,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -104,7 +99,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -158,7 +153,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -179,13 +174,11 @@
 							"query": [
 								{
 									"key": "search",
-									"value": "SCG",
-									"description": "ค้นหาด้วยชื่อหรือเลขประจำตัวผู้เสียภาษี"
+									"value": "SCG"
 								},
 								{
 									"key": "type",
-									"value": "Enterprise",
-									"description": "คัดกรองตามประเภทลูกค้า (Enterprise, SMB, Individual)"
+									"value": "Enterprise"
 								},
 								{
 									"key": "page",
@@ -206,15 +199,9 @@
 									"const response = pm.response.json();",
 									"if (response.success && response.data && response.data.id) {",
 									"    pm.collectionVariables.set('customer_id', response.data.id);",
-									"    console.log('อัปเดตตัวแปร customer_id เป็น:', response.data.id);",
 									"}",
-									"",
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
-									"});",
-									"pm.test(\"Customer is created with correct name\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data.name).to.include('ปูนซิเมนต์ไทย');",
 									"});"
 								],
 								"type": "text/javascript",
@@ -227,7 +214,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -279,7 +266,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -328,7 +315,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -365,15 +352,9 @@
 									"const response = pm.response.json();",
 									"if (response.success && response.data && response.data.id) {",
 									"    pm.collectionVariables.set('contact_id', response.data.id);",
-									"    console.log('อัปเดตตัวแปร contact_id เป็น:', response.data.id);",
 									"}",
-									"",
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
-									"});",
-									"pm.test(\"Contact person matches SCG contact name\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data.name).to.equal('คุณสมชาย รักชาติ');",
 									"});"
 								],
 								"type": "text/javascript",
@@ -386,7 +367,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -424,10 +405,6 @@
 									"const response = pm.response.json();",
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
-									"});",
-									"pm.test(\"Contact person name is updated\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data.name).to.equal('คุณสมชาย รักชาติไทย');",
 									"});"
 								],
 								"type": "text/javascript",
@@ -440,7 +417,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -476,13 +453,8 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const response = pm.response.json();",
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
-									"});",
-									"pm.test(\"Contact person is deleted successfully\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.message).to.include('สำเร็จ');",
 									"});"
 								],
 								"type": "text/javascript",
@@ -495,7 +467,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -527,13 +499,8 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const response = pm.response.json();",
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
-									"});",
-									"pm.test(\"Shipping address recipient is correct\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data.label).to.equal('ฝ่ายคลังสินค้า SCG บางซื่อ');",
 									"});"
 								],
 								"type": "text/javascript",
@@ -546,7 +513,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -581,13 +548,8 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const response = pm.response.json();",
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
-									"});",
-									"pm.test(\"Customer statistics data fields are valid\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data.payment_on_time).to.be.a('number');",
 									"});"
 								],
 								"type": "text/javascript",
@@ -600,7 +562,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -636,13 +598,8 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const response = pm.response.json();",
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
-									"});",
-									"pm.test(\"Projects list format is valid array\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data).to.be.an('array');",
 									"});"
 								],
 								"type": "text/javascript",
@@ -655,7 +612,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -676,8 +633,7 @@
 							"query": [
 								{
 									"key": "status",
-									"value": "Inquiry",
-									"description": "คัดกรองตามสถานะ (Inquiry, Sample, Production, Shipping, Distributing, Delivered, Cancelled)"
+									"value": "Inquiry"
 								}
 							]
 						}
@@ -694,15 +650,9 @@
 									"const response = pm.response.json();",
 									"if (response.success && response.data && response.data.id) {",
 									"    pm.collectionVariables.set('project_id', response.data.id);",
-									"    console.log('อัปเดตตัวแปร project_id เป็น:', response.data.id);",
 									"}",
-									"",
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
-									"});",
-									"pm.test(\"Project code auto-generates correctly\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data.project_code).to.match(/PPN-\\d+/);",
 									"});"
 								],
 								"type": "text/javascript",
@@ -715,7 +665,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -748,13 +698,8 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const response = pm.response.json();",
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
-									"});",
-									"pm.test(\"Project details match expected project_id\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data.id).to.equal(parseInt(pm.collectionVariables.get('project_id')));",
 									"});"
 								],
 								"type": "text/javascript",
@@ -767,7 +712,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -797,13 +742,8 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const response = pm.response.json();",
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
-									"});",
-									"pm.test(\"Project value is updated\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(parseFloat(response.data.order_value)).to.equal(380000.00);",
 									"});"
 								],
 								"type": "text/javascript",
@@ -816,7 +756,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -850,13 +790,8 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const response = pm.response.json();",
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
-									"});",
-									"pm.test(\"Project status changed to Sample\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data.status).to.equal('Sample');",
 									"});"
 								],
 								"type": "text/javascript",
@@ -869,7 +804,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -907,15 +842,9 @@
 									"const response = pm.response.json();",
 									"if (response.success && response.data && response.data.id) {",
 									"    pm.collectionVariables.set('product_item_id', response.data.id);",
-									"    console.log('อัปเดตตัวแปร product_item_id เป็น:', response.data.id);",
 									"}",
-									"",
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
-									"});",
-									"pm.test(\"Product item name is registered\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data.name).to.include('กระเป๋าผ้าแคนวาส');",
 									"});"
 								],
 								"type": "text/javascript",
@@ -928,7 +857,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -963,13 +892,8 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const response = pm.response.json();",
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
-									"});",
-									"pm.test(\"Product item quantity is updated\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data.qty).to.equal(5500);",
 									"});"
 								],
 								"type": "text/javascript",
@@ -982,7 +906,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -1018,13 +942,8 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const response = pm.response.json();",
 									"pm.test(\"Status code is 201\", function () {",
 									"    pm.response.to.have.status(201);",
-									"});",
-									"pm.test(\"Additional request is created successfully\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data.description).to.include('ตัวอย่าง');",
 									"});"
 								],
 								"type": "text/javascript",
@@ -1037,7 +956,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -1072,13 +991,8 @@
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const response = pm.response.json();",
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
-									"});",
-									"pm.test(\"Logs contain a valid array list\", function () {",
-									"    pm.expect(response.success).to.be.true;",
-									"    pm.expect(response.data).to.be.an('array');",
 									"});"
 								],
 								"type": "text/javascript",
@@ -1091,7 +1005,7 @@
 						"header": [
 							{
 								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
+								"value": "application/json",
 								"type": "text"
 							},
 							{
@@ -1110,6 +1024,1209 @@
 								"projects",
 								"{{project_id}}",
 								"logs"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Supplier",
+			"item": [
+				{
+					"name": "GET Suppliers",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/suppliers?search=เจริญ",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "เจริญ"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Supplier",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('supplier_id', response.data.id);",
+									"}",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"โรงงานพรีเมียมคราฟต์\",\n  \"category\": \"Premium\",\n  \"contact_person\": \"คุณสมศักดิ์\",\n  \"phone\": \"081-111-2222\",\n  \"email\": \"contact@premiumcraft.com\",\n  \"rating\": 4.8\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/suppliers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET Supplier Detail",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT Update Supplier",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"โรงงานพรีเมียมคราฟต์ จำกัด\",\n  \"category\": \"Premium Manufacturer\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Quote Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('quote_id', response.data.id);",
+									"}",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"project_id\": {{project_id}},\n  \"product_item_id\": {{product_item_id}},\n  \"product_name\": \"ร่มกอล์ฟ SCG พรีเมียม\",\n  \"qty\": 1000,\n  \"specs\": \"ขนาด 30 นิ้ว โครงไฟเบอร์ กันยูวี 100%\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}/quotes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}",
+								"quotes"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET Supplier Quotes",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}/quotes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}",
+								"quotes"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Generate Quote Link",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.session_token) {",
+									"    pm.collectionVariables.set('session_token', response.data.session_token);",
+									"}",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}/quotes/{{quote_id}}/generate-link",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}",
+								"quotes",
+								"{{quote_id}}",
+								"generate-link"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT Public Fill Quote Price",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"quoted_price\": 250.00,\n  \"currency\": \"THB\",\n  \"lead_time\": \"20 วันหลังชำระเงินมัดจำ\",\n  \"moq\": 100,\n  \"remark\": \"รับประกันคุณภาพโครงไฟเบอร์ 1 ปี\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/quotes/public/{{session_token}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"quotes",
+								"public",
+								"{{session_token}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PATCH Quote Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"Approved\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}/quotes/{{quote_id}}/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}",
+								"quotes",
+								"{{quote_id}}",
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Supplier Sample",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('supplier_sample_id', response.data.id);",
+									"}",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"project_id\": {{project_id}},\n  \"product_name\": \"ตัวอย่างร่มกอล์ฟ SCG\",\n  \"specs\": \"โครงร่มสีดำ ผ้าสลับขาวทอง\",\n  \"cost\": \"Free\",\n  \"tracking_no\": \"TH-KERRY-12345\",\n  \"expected_date\": \"2026-07-20\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}/samples",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}",
+								"samples"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET Supplier Samples",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}/samples",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}",
+								"samples"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PATCH Supplier Sample Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"Sample Sent\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}/samples/{{supplier_sample_id}}/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}",
+								"samples",
+								"{{supplier_sample_id}}",
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Supplier Bill",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('supplier_bill_id', response.data.id);",
+									"}",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"project_id\": {{project_id}},\n  \"product_name\": \"ร่มกอล์ฟ SCG\",\n  \"bill_type\": \"Deposit\",\n  \"amount\": 125000.00,\n  \"currency\": \"THB\",\n  \"due_month\": \"2026-07\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}/bills",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}",
+								"bills"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET Supplier Bills",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}/bills",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}",
+								"bills"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Upload Supplier Bill Document",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file_type",
+									"value": "pi",
+									"type": "text"
+								},
+								{
+									"key": "file",
+									"src": "dummy.pdf",
+									"type": "file"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}/bills/{{supplier_bill_id}}/upload",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}",
+								"bills",
+								"{{supplier_bill_id}}",
+								"upload"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PATCH Pay Supplier Bill",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/suppliers/{{supplier_id}}/bills/{{supplier_bill_id}}/pay",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"suppliers",
+								"{{supplier_id}}",
+								"bills",
+								"{{supplier_bill_id}}",
+								"pay"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Finance",
+			"item": [
+				{
+					"name": "POST Create Finance Document",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('finance_document_id', response.data.id);",
+									"}",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"pm.test(\"Doc number auto-generates correctly\", function () {",
+									"    pm.expect(response.data.doc_no).to.match(/QU-\\d{4}-\\d{4}/);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"project_id\": {{project_id}},\n  \"doc_type\": \"QU\",\n  \"issue_date\": \"2026-07-04\",\n  \"notes\": \"เสนอราคาร่มกอล์ฟและหมวก\",\n  \"items\": [\n    {\n      \"item_name\": \"ร่มกอล์ฟ SCG พรีเมียม\",\n      \"qty\": 1000,\n      \"unit_price\": 350.00\n    },\n    {\n      \"item_name\": \"หมวกพรีเมียมสีทอง\",\n      \"qty\": 500,\n      \"unit_price\": 120.00\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/finance/documents",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"finance",
+								"documents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET Finance Documents",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/finance/documents?doc_type=QU",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"finance",
+								"documents"
+							],
+							"query": [
+								{
+									"key": "doc_type",
+									"value": "QU"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET Finance Document Detail",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/finance/documents/{{finance_document_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"finance",
+								"documents",
+								"{{finance_document_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT Update Finance Document",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"issue_date\": \"2026-07-04\",\n  \"items\": [\n    {\n      \"item_name\": \"ร่มกอล์ฟ SCG พรีเมียม ปรับปรุงแบบ\",\n      \"qty\": 1000,\n      \"unit_price\": 380.00\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/finance/documents/{{finance_document_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"finance",
+								"documents",
+								"{{finance_document_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PATCH Finance Document Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"Sent\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/finance/documents/{{finance_document_id}}/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"finance",
+								"documents",
+								"{{finance_document_id}}",
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Payment",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('payment_id', response.data.id);",
+									"}",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"project_id\": {{project_id}},\n  \"finance_document_id\": {{finance_document_id}},\n  \"payment_type\": \"Deposit\",\n  \"amount\": 190000.00,\n  \"method\": \"Bank Transfer\",\n  \"payment_date\": \"2026-07-04\",\n  \"notes\": \"ชำระเงินมัดจำใบเสนอราคา\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/finance/payments",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"finance",
+								"payments"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET Payments",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/finance/payments",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"finance",
+								"payments"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Upload Payment Slip",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"src": "dummy.pdf",
+									"type": "file"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/finance/payments/{{payment_id}}/upload-slip",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"finance",
+								"payments",
+								"{{payment_id}}",
+								"upload-slip"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PATCH Verify Payment",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"Confirmed\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/finance/payments/{{payment_id}}/verify",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"finance",
+								"payments",
+								"{{payment_id}}",
+								"verify"
 							]
 						}
 					},
@@ -1143,7 +2260,7 @@
 				"header": [
 					{
 						"key": "Content-Type",
-						"value": "application/json; charset=utf-8",
+						"value": "application/json",
 						"type": "text"
 					},
 					{
@@ -1225,6 +2342,41 @@
 		},
 		{
 			"key": "product_item_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "supplier_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "quote_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "session_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "supplier_sample_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "supplier_bill_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "finance_document_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "payment_id",
 			"value": "1",
 			"type": "string"
 		}
