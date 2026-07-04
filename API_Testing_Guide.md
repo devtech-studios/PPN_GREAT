@@ -1,379 +1,153 @@
-# คู่มือการทดสอบ PPN GREAT API (Backend) แบบละเอียด จากศูนย์จนครบถ้วน
+# 🏭 PPN GREAT — คู่มือการรันและทดสอบระบบ API หลังบ้าน (100% Completed Guide)
 
-คู่มือนี้ระบุขั้นตอนการตั้งค่าเครื่องและทดสอบ API ของ PPN GREAT ทั้งหมดในปัจจุบัน (Phase 1: Auth, Customers, Projects) ตั้งแต่ขั้นเตรียมฐานข้อมูล การรันเซิร์ฟเวอร์ ไปจนถึงตัวอย่างคำสั่งทดสอบทีละขั้นตอนด้วย **Postman** และ **PowerShell / curl**
+คู่มือฉบับสมบูรณ์สำหรับผู้ใช้และทีมงานในการติดตั้ง รันเซิร์ฟเวอร์ และทำการทดสอบ API ทั้งหมด 69 คำขอของระบบ PPN GREAT ครบถ้วนทั้ง 4 เฟส
 
 ---
 
-## 🛠️ ขั้นตอนที่ 1: การเตรียมระบบและรันเซิร์ฟเวอร์ (Local Setup)
+## 🛠️ ขั้นตอนที่ 1: การเตรียมระบบและรันเซิร์ฟเวอร์หลังบ้าน (Local Setup)
 
-ก่อนเริ่มต้นทดสอบ ต้องแน่ใจว่าติดตั้ง XAMPP หรือ PHP และ MySQL เรียบร้อยแล้ว
+ก่อนเริ่มต้นทดสอบ ต้องแน่ใจว่าติดตั้ง XAMPP หรือ PHP และ MySQL เรียบร้อยแล้วบนเครื่องคอมพิวเตอร์ของคุณ
 
 ### 1.1 ตรวจสอบและตั้งค่าฐานข้อมูล
-เปิด MySQL ใน XAMPP (หรือเครื่องมืออื่น ๆ เช่น phpMyAdmin/HeidiSQL) และสร้างฐานข้อมูลว่างสำหรับ Staging:
+เปิด MySQL ใน XAMPP และสร้างฐานข้อมูลว่างผ่าน phpMyAdmin หรือ HeidiSQL:
 ```sql
 CREATE DATABASE ppn_staging CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-### 1.2 ติดตั้ง Dependencies และ Migrations
-เปิด Terminal/PowerShell ในโฟลเดอร์โปรเจกต์ `ppn-api` (`d:\07_Projects\Work\PNN\ppn-api`) แล้วรันคำสั่งเหล่านี้:
+### 1.2 ติดตั้ง Dependencies และรัน Migrations
+เปิด Terminal หรือ PowerShell ในโฟลเดอร์โปรเจกต์ API: `d:\07_Projects\Work\PNN\ppn-api` แล้วรันคำสั่งเหล่านี้:
 
-1. **ติดตั้ง Composer Packages:**
-   ```bash
-   composer install --ignore-platform-reqs
-   ```
-2. **สร้างไฟล์การตั้งค่าระบบ (`.env`):**
-   คัดลอกไฟล์ `.env.example` มาเป็น `.env` และตั้งชื่อฐานข้อมูลรวมถึงการตั้งค่า JWT:
-   ```ini
-   DB_DATABASE=ppn_staging
-   DB_USERNAME=root
-   DB_PASSWORD=
-   
-   JWT_SECRET=WwQzW4bRtU... (หรือรันคำสั่งด้านล่างเพื่อสร้างคีย์อัตโนมัติ)
-   ```
-3. **สร้าง Application Key และ JWT Key:**
-   ```bash
-   php artisan key:generate
-   php artisan jwt:secret
-   ```
-4. **รัน Migration และเติมข้อมูลตั้งต้น (Seeder):**
-   ```bash
-   php artisan migrate:fresh --seed
-   ```
-   *หมายเหตุ: คำสั่งนี้จะสร้าง 26 ตาราง และสร้างบัญชีผู้ใช้เริ่มต้นคือ `admin@ppngreat.com` (รหัสผ่าน: `password123`) และคลังสินค้าอัตโนมัติ 2 แห่ง*
+1.  **ติดตั้ง Composer Packages:**
+    ```bash
+    composer install --ignore-platform-reqs
+    ```
+2.  **ตั้งค่าไฟล์สิ่งแวดล้อม (`.env`):**
+    คัดลอกไฟล์ `.env.example` มาเป็น `.env` และกรอกรหัสฐานข้อมูล:
+    ```ini
+    DB_DATABASE=ppn_staging
+    DB_USERNAME=root
+    DB_PASSWORD=
+    ```
+3.  **สร้างคีย์ความปลอดภัยระบบ และ JWT:**
+    ```bash
+    php artisan key:generate
+    php artisan jwt:secret
+    ```
+4.  **รันตาราง Database และ Seeder บัญชีเริ่มต้น:**
+    ```bash
+    php artisan migrate:fresh --seed
+    ```
+    *💡 ตารางฐานข้อมูลทั้ง 26 ตารางจะถูกสร้างขึ้น พร้อมบัญชีผู้ใช้สำหรับล็อกอินเริ่มต้น: `admin@ppngreat.com` (รหัสผ่าน: `password123`) และคลังสินค้า 2 แห่ง*
 
-### 1.3 เปิดรัน API Server
-ก่อนรันคำสั่ง ต้องเปลี่ยนโฟลเดอร์เข้าไปที่โฟลเดอร์ย่อย `ppn-api` ก่อนทุกครั้ง:
+### 1.3 สั่งเปิดรัน API Server ท้องถิ่น
+เปิด PowerShell ในโฟลเดอร์ `d:\07_Projects\Work\PNN\ppn-api` แล้วรันคำสั่งด้านล่างนี้ (หากเปิดใช้งาน XAMPP ให้ใช้คำสั่งชี้ PATH ชั่วคราว):
+
 ```powershell
-cd ppn-api
-```
-
-หากกดรันแล้วพบข้อผิดพลาดว่าไม่รู้จักคำสั่ง `php` (The term 'php' is not recognized...) ให้รันคำสั่งแอด PATH ของ XAMPP ชั่วคราวก่อนเริ่มใช้งานดังนี้:
-
-**สำหรับ PowerShell:**
-```powershell
+# เพิ่ม PATH ชั่วคราวเพื่อให้เรียกใช้คำสั่ง PHP จาก XAMPP ได้
 $env:PATH = "C:\xampp\php;$env:PATH"
+
+# สั่งเปิดรันเซิร์ฟเวอร์ API พอร์ต 8000
 php artisan serve --port=8000
 ```
-
-**สำหรับ Command Prompt (CMD):**
-```cmd
-set PATH=C:\xampp\php;%PATH%
-php artisan serve --port=8000
-```
-
-เซิร์ฟเวอร์จะเปิดใช้งานที่ `http://127.0.0.1:8000`
+เซิร์ฟเวอร์จะเปิดใช้งานอยู่ที่ **`http://127.0.0.1:8000`** กรุณาอย่าเพิ่งปิดหน้าต่างเซิร์ฟเวอร์นี้ขณะทำการทดสอบ
 
 ---
 
-## 📇 ขั้นตอนที่ 2: วิธีการส่ง Request เพื่อทดสอบ
+## 🚀 ขั้นตอนที่ 2: วิธีการสั่งรันการทดสอบระบบ (Running the APIs)
 
-คุณสามารถเลือกทดสอบได้ 2 วิธีหลัก:
+คุณสามารถเลือกทดสอบระบบได้ 3 วิธีหลักตามความสะดวก:
 
-### 1. ผ่าน Postman (นำเข้าไฟล์ Collection สะดวกที่สุด 🚀)
-ผมได้จัดทำไฟล์สำหรับนำเข้า Postman ไว้ให้เรียบร้อยแล้วในโปรเจกต์ของคุณ ชื่อไฟล์: **[PPN_GREAT_Postman_Collection.json](file:///d:/07_Projects/Work/PNN/ppn_great/PPN_GREAT_Postman_Collection.json)**
-
-#### ขั้นตอนการนำเข้าและทดสอบ:
-1. เปิดโปรแกรม **Postman**
-2. กดปุ่ม **Import** (บริเวณมุมซ้ายบนของโปรแกรม)
-3. เลือกไฟล์ `PPN_GREAT_Postman_Collection.json` จากไดเรกทอรีโครงการของคุณแล้วกด Import
-4. คุณจะเห็นคอลเลกชันใหม่ชื่อ **PPN GREAT API** ปรากฏขึ้นมาพร้อมโฟลเดอร์ย่อย: `Auth`, `Customer`, และ `Project`
-5. **ระบบดึง Token อัตโนมัติ (Automated Token Extraction):** 
-   - เมื่อคุณกดส่งคำขอ **login** ในโฟลเดอร์ `Auth` สำเร็จ ระบบจะรันสคริปต์หลังการตอบกลับ (Post-response Script) เพื่อดึงรหัสโทเคน JWT และบันทึกเข้าในตัวแปรคอลเลกชันชื่อ `{{access_token}}` ให้ทันทีโดยอัตโนมัติ
-   - คำขออื่น ๆ ทั้งหมดได้รับการตั้งค่าให้ใช้ Bearer Token จาก `{{access_token}}` อยู่แล้ว (Inherit auth from parent) ทำให้คุณสามารถกดส่งคำขออื่น ๆ ได้ทันทีโดยไม่ต้องทำการคัดลอกโทเคนมาวางเอง!
-   - นอกจากนี้ เมื่อกดสร้างลูกค้าหรือโปรเจกต์ ตัวแปร `{{customer_id}}` และ `{{project_id}}` จะถูกบันทึกเพื่อเอาไปใช้งานต่อกับ Endpoint รายละเอียดและอัปเดตให้อัตโนมัติเช่นกัน
-
-### 2. ผ่าน PowerShell (สำหรับทดสอบด้วยสคริปต์อัตโนมัติที่ทำงานเร็ว)
+### 1. รันอัตโนมัติทั้งระบบด้วยสคริปต์ PowerShell (ง่ายที่สุด 🚀)
+เราได้สร้างสคริปต์รันการทดสอบและจัดทำรายงานผลลัพธ์แบบ HTML สวยงามไว้ให้แล้ว
+1.  เปิดหน้าต่าง PowerShell ใหม่
+2.  เข้าไปที่โฟลเดอร์หลัก: `cd d:\07_Projects\Work\PNN\ppn_great`
+3.  รันสคริปต์ด้วยคำสั่ง:
+    ```powershell
+    Powershell -ExecutionPolicy Bypass -File .\run_all_tests.ps1
+    ```
+    *💡 สคริปต์จะทำการสั่งรัน Feature Test หลังบ้านทั้งหมด ตามด้วยการยิงจำลองใช้งานจริง 69 คำขอผ่าน Newman CLI และเปิดหน้าต่างรายงานผลลัพธ์แบบ Interactive Dashboard ที่ [reports/report.html](file:///d:/07_Projects/Work/PNN/ppn_great/reports/report.html) ให้คุณทันที!*
 
 ---
 
-### ข้อสำคัญในการเรียกใช้งาน API (กรณีทดสอบรายตัวด้วยโปรแกรมอื่น):
-*   ต้องนำ **JWT Token** ที่ได้จาก API Login ส่งมาใน HTTP Headers ทุกครั้ง ในรูปแบบ:
-    *   **Header Name:** `Authorization`
-    *   **Header Value:** `Bearer <JWT_TOKEN_HERE>`
-*   ต้องระบุ Header พิเศษเพื่อให้ API คืนค่าเป็น JSON และรับค่าภาษาไทยได้ถูกต้อง:
-    *   `Content-Type`: `application/json; charset=utf-8`
-    *   `Accept`: `application/json`
+### 2. นำเข้าไฟล์ไปรันด้วยตนเองบนโปรแกรม Postman GUI (ดีที่สุดสำหรับการวิเคราะห์ทีละคำขอ 🔍)
+
+#### ก. การนำเข้าไฟล์ Collection
+1.  เปิดโปรแกรม **Postman**
+2.  กดปุ่ม **Import** (บริเวณมุมซ้ายบน)
+3.  เลือกไฟล์คอลเลกชันจากโฟลเดอร์งานของคุณ: [PPN_GREAT_Postman_Collection.json](file:///d:/07_Projects/Work/PNN/ppn_great/PPN_GREAT_Postman_Collection.json) แล้วกด Import
+
+#### ข. การทำงานร่วมกับตัวแปรอัตโนมัติ (Dynamic Variables)
+คอลเลกชันได้รับการฝัง **สคริปต์อัจฉริยะ (Post-response scripts)** เพื่อให้คุณทำงานได้โดยไม่ต้องเสียเวลาคัดลอก ID หรือ Token ไปป้อนเอง:
+*   **Token อัตโนมัติ:** เมื่อคุณกดส่งคำขอ **login** ในกล่อง `Auth & Account` ระบบจะคัดแยกค่า JWT Token และนำไปบันทึกเป็นสิทธิ์ Header ส่วนกลางให้อัตโนมัติในตัวแปร `{{access_token}}`
+*   **จำเลขรหัส IDs:** เมื่อคุณกดสร้างลูกค้า (Customer), โครงการ (Project), ชิ้นงานตัวอย่าง (Sample) หรือคลังคอนเทนเนอร์ (Container) ระบบจะดึงรหัส ID ล่าสุดมาเซฟลงตัวแปรให้อัตโนมัติเพื่อใช้ในคำขอลำดับถัดไป (เช่น อัปเดตสเตตัส หรือดูสถิติ)
+
+#### ค. สั่งรันแบบกึ่งอัตโนมัติในคลิกเดียว (Collection Runner)
+1.  คลิกขวาที่ชื่อคอลเลกชัน **PPN GREAT**
+2.  เลือกเมนู **Run Collection**
+3.  ตรวจสอบว่าคำขอทุกตัวเปิดเครื่องหมายถูกไว้ จากนั้นกดปุ่ม **Run PPN GREAT** สีส้มระบบจะเริ่มยิงให้คุณครบถ้วนตามขั้นตอนของธุรกิจจริง!
 
 ---
 
-## 🏃‍♂️ ขั้นตอนที่ 3: ลำดับฉากทดสอบ (Step-by-Step Test Scenarios)
+## 🏃‍♂️ ขั้นตอนที่ 3: ลำดับขั้นตอนการยิงทดสอบระบบธุรกิจจริง (Step-by-Step Scenarios)
 
-ทำตามขั้นตอนด้านล่างทีละข้อเพื่อทดสอบ Flow การทำงานของระบบทั้งหมดตั้งแต่เข้าสู่ระบบ สร้างลูกค้า และทำโปรเจกต์งาน
+เพื่อให้เข้าใจโฟลว์ทำงานจริง ให้ทำตามลำดับขั้นตอนธุรกิจ PPN ดังนี้:
 
-### 🔑 ฉากที่ 1: การเข้าสู่ระบบและการขอสิทธิ์ (Authentication)
+### 1. ล็อกอินเข้าสู่ระบบ (Phase 1)
+*   ยิงคำขอ **POST /api/auth/login** ด้วยอีเมล `admin@ppngreat.com` และรหัสผ่าน `password123`
+*   สิทธิ์ล็อกอิน Bearer Token จะถูกดึงและล็อกอินสิทธิ์สำหรับคำขอถัดไปทันที
 
-#### 1.1 ส่งคำขอเข้าสู่ระบบ (Login)
-*   **Method:** `POST`
-*   **URL:** `http://127.0.0.1:8000/api/auth/login`
-*   **Body (JSON):**
-    ```json
-    {
-      "email": "admin@ppngreat.com",
-      "password": "password123"
-    }
-    ```
-*   **ผลลัพธ์ที่คาดหวัง:** ตอบกลับรหัส 200 พร้อมกับมี `token` อยู่ในข้อมูล `data` ดังนี้:
-    ```json
-    {
-      "success": true,
-      "data": {
-        "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-        "token_type": "bearer",
-        "expires_in": 3600
-      },
-      "message": "เข้าสู่ระบบสำเร็จ"
-    }
-    ```
-    *(ให้คัดลอกค่า token นี้ไปใส่ในส่วน Authorization Header ของ API ตัวถัดไป)*
+### 2. จัดการลูกค้าและโครงการ (Phase 1)
+*   ยิง **POST /api/customers** เพื่อบันทึกชื่อลูกค้าไทย (เช่น AIS)
+*   ยิง **POST /api/projects** ผูกลูกค้าเพื่อเปิดโปรเจกต์งานพรีเมียม (รหัสจะเริ่มรันอัตโนมัติเป็น `PPN-001`)
 
-#### 1.2 ตรวจสอบข้อมูลผู้ใช้ปัจจุบัน (Get Current User Profile)
-*   **Method:** `GET`
-*   **URL:** `http://127.0.0.1:8000/api/auth/me`
-*   **Headers:** `Authorization: Bearer <token>`
-*   **ผลลัพธ์ที่คาดหวัง:** ข้อมูลโปรไฟล์ของผู้ใช้คนนั้น เช่น `id`, `name`, `email` และบทบาท
+### 3. ยื่นดีลกับซัพพลายเออร์และเสนอราคา (Phase 2)
+*   ยิง **POST /api/suppliers/{id}/quotes** เพื่อเสนอขอราคาสกรีนร่มจากโรงงานจีน
+*   ยิง **POST /api/suppliers/{id}/quotes/{qid}/generate-link** เพื่อสร้างลิงก์สำหรับส่งให้ซัพพลายเออร์จีนกดเข้ามาป้อนราคา
+*   **สำหรับโรงงานจีน (ภายนอก):** ซัพพลายเออร์จีนจะกดป้อนราคา, Lead Time, และค่าทำตัวอย่างสินค้า กลับเข้ามาในระบบผ่านลิงก์ของโรงงานจีน (API สาธารณะ `PUT /api/quotes/public/{token}`) โดยไม่ต้องผ่านระบบล็อกอินหลังบ้าน
+*   ฝ่ายจัดซื้อดูราคาและยิงอนุมัติใบเสนอราคาผ่าน API
 
-#### 1.3 ออกจากระบบ (Logout)
-*   **Method:** `POST`
-*   **URL:** `http://127.0.0.1:8000/api/auth/logout`
-*   **Headers:** `Authorization: Bearer <token>`
-*   **ผลลัพธ์ที่คาดหวัง:** `"message": "ออกจากระบบสำเร็จ"` และโทเคนเดิมจะใช้งานไม่ได้อีกต่อไป
+### 4. เรียกเก็บเงินมัดจำก้อนแรก (Phase 2)
+*   ยิง **POST /api/finance/documents** ออกเอกสารใบเสนอราคา (QU) และใบแจ้งหนี้มัดจำล่วงหน้า (PI) ด้วยเลขซีเรียลอัตโนมัติ เช่น `PI-2026-0001`
+*   ยิง **POST /api/finance/payments** บันทึกการโอนเงินก้อนแรกของลูกค้าไทยพร้อมรูปภาพไฟล์สลิปโอนเงิน
+*   ยิง **PATCH /api/finance/payments/{id}/verify** เพื่อยืนยันว่าการเงินตรวจสอบยอดถูกต้อง เพื่อเปลี่ยนสถานะโปรเจกต์ขึ้นดำเนินการผลิตจริง
 
----
+### 5. ตรวจสอบ Artwork และของตัวอย่าง (Phase 3)
+*   ยิง **POST /api/artworks** แนบลิงก์หรืออัปโหลดไฟล์ตัวอย่างภาพงานพิมพ์สกรีน
+*   ยิง **PATCH /api/artworks/{id}/feedback** บันทึกคอมเมนต์แก้ไขฟอนต์หรือสีของลูกค้า ปรับเป็น `Need Revision`
+*   ยิง **POST /api/samples** บันทึกส่งชิ้นงานตัวอย่างจริงชิ้นที่ 1 (PPS) ไปให้ลูกค้าตรวจ หากไม่ผ่านและกดปฏิเสธ ยอดครั้งที่ยื่นตรวจ (`attempt`) จะเพิ่มขึ้นเป็นครั้งที่ 2 โดยอัตโนมัติ เพื่อบันทึกเก็บเป็นประวัติการแก้ไข
 
-### 👥 ฉากที่ 2: ระบบจัดการลูกค้าและผู้ติดต่อ (Customer Management)
+### 6. การเดินทางของตู้สินค้าและการกระจายแบบ 90/10 (Phase 3)
+*   ยิง **POST /api/containers** ลงทะเบียนตู้และเรือนำเข้าสินค้าพรีเมียมจากท่าเรือจีนมาไทย
+*   ยิง **PATCH /api/containers/{id}/step** อัปเดตสเตตัสการเดินทาง (Sailing -> Delivered)
+*   **กระจายแบบ 90/10:** ยิงคำขอ **POST /api/containers/{id}/route-goods** เพื่อจัดสรรและกระจายสินค้าออกจากตู้:
+    *   **90% ส่งมอบหน้างานลูกค้าทันที:** ระบบจะแปลงเป็นใบเตรียมจัดส่งด่วนโดยตรง
+    *   **10% เก็บเข้าคลังสินค้าบริษัท:** ระบบจะรับเข้าเก็บ ณ คลังสินค้าจริง (Warehouse 1) พร้อมสร้างประวัติรับเข้าสต็อกประเภท `IN`
 
-#### 2.1 เพิ่มลูกค้าใหม่ (Create Customer)
-*   **Method:** `POST`
-*   **URL:** `http://127.0.0.1:8000/api/customers`
-*   **Headers:** `Authorization: Bearer <token>`
-*   **Body (JSON):**
-    ```json
-    {
-      "name": "บริษัท ปูนซิเมนต์ไทย จำกัด (มหาชน)",
-      "type": "Enterprise",
-      "tax_id": "0105556000123",
-      "industry": "Construction",
-      "phone": "02-586-3333",
-      "email": "info@scg.com",
-      "website": "https://www.scg.com",
-      "lead_source": "Website",
-      "notes": "ลูกค้ารายใหญ่ ต้องการสั่งทำของพรีเมียมบ่อยครั้ง"
-    }
-    ```
-*   **ผลลัพธ์ที่คาดหวัง:** ข้อมูลลูกค้าใหม่ที่บันทึกพร้อมค่า `id` และสร้างประวัติ Log ในฐานข้อมูลอัตโนมัติ
+### 7. จองคลังสินค้า จัดส่ง และตัดสต็อกแบบปลอดภัย (Phase 3)
+*   ยิง **POST /api/delivery/rounds** จัดตารางปล่อยรถจัดส่งสินค้าและผูกรายการสินค้าพรีเมียม (ระบบจะเข้าจองล็อกสินค้าในสต็อกไว้ชั่วคราวเพื่อกันคนอื่นดึงไปใช้ซ้ำ)
+*   ยิง **PATCH /api/delivery/rounds/{id}/confirm** เมื่อรถเคลื่อนขบวนออก (In Transit) ระบบจะทำรายการระดับ **DB Transaction** เพื่อตัดลดจำนวนสินค้าในสต็อกกลางจริง พร้อมสร้างประวัติความเคลื่อนไหวสต็อกขาออก (`OUT` movement)
 
-#### 2.2 เพิ่มผู้ติดต่อหลักของลูกค้า (Add Contact Person)
-*   **Method:** `POST`
-*   **URL:** `http://127.0.0.1:8000/api/customers/1/contacts`
-*   *(เปลี่ยนเลข `1` ตาม ID ของลูกค้าที่ได้จากการบันทึกก่อนหน้า)*
-*   **Headers:** `Authorization: Bearer <token>`
-*   **Body (JSON):**
-    ```json
-    {
-      "name": "คุณสมชาย รักชาติ",
-      "position": "ผู้จัดการฝ่ายจัดซื้อ",
-      "phone": "081-234-5678",
-      "email": "somchai.r@scg.com",
-      "line_id": "somchai_scg",
-      "is_primary": true
-    }
-    ```
-*   **ผลลัพธ์ที่คาดหวัง:** บันทึกผู้ติดต่อเข้าตาราง `contact_people` และเมื่อระบุ `is_primary: true` ระบบจะนำผู้ติดต่อหลักคนเก่าของลูกค้าออกให้อัตโนมัติ
-
-#### 2.3 เพิ่มที่อยู่จัดส่งของลูกค้า (Add Shipping Address)
-*   **Method:** `POST`
-*   **URL:** `http://127.0.0.1:8000/api/customers/1/addresses`
-*   **Headers:** `Authorization: Bearer <token>`
-*   **Body (JSON):**
-    ```json
-    {
-      "recipient_name": "ฝ่ายคลังสินค้า SCG บางซื่อ",
-      "phone": "02-586-4444",
-      "address_line1": "1 ถนนปูนซิเมนต์ไทย",
-      "address_line2": "แขวงบางซื่อ เขตบางซื่อ",
-      "province": "กรุงเทพมหานคร",
-      "postal_code": "10800",
-      "is_default": true
-    }
-    ```
-
-#### 2.4 ตรวจสอบข้อมูลสถิติของลูกค้า (Get Customer Statistics)
-*   **Method:** `GET`
-*   **URL:** `http://127.0.0.1:8000/api/customers/1/stats`
-*   **Headers:** `Authorization: Bearer <token>`
-*   **ผลลัพธ์ที่คาดหวัง:** ข้อมูลสรุป KPI เชิงพาณิชย์:
-    ```json
-    {
-      "success": true,
-      "data": {
-        "customer_id": 1,
-        "lifetime_revenue": 0.00,
-        "total_projects": 0,
-        "active_projects": 0,
-        "payment_on_time_rate": 100
-      }
-    }
-    ```
+### 8. ดูสรุปตัวชี้วัดหน้า Dashboard & Reports (Phase 4)
+*   ยิง **GET /api/dashboard/summary** ดึงผลประมวลสรุป KPIs ยอดค้างรับเงินเดือนนี้ สต็อกเหลือน้อย
+*   ยิง **GET /api/dashboard/revenue-chart** ดึงข้อมูลรายได้ย้อนหลัง 12 เดือนไปใช้วาดเส้นกราฟ
+*   ยิง **GET /api/reports/profit-by-project** ดึงรายงานวิเคราะห์สถิติกำไรและอัตรากำไร (Margin %) ของแต่ละโปรเจกต์ให้ผู้บริหารวิเคราะห์ผลงาน
 
 ---
 
-### 📂 ฉากที่ 3: ระบบท่อส่งงานและโปรเจกต์สินค้า (Projects & Pipelines)
+## 🗄️ ขั้นตอนที่ 5: การตรวจสอบข้อมูลจริงในฐานข้อมูล MySQL (Database Queries)
 
-#### 3.1 สร้างโปรเจกต์งานขายสินค้าพรีเมียม (Create Project)
-*   **Method:** `POST`
-*   **URL:** `http://127.0.0.1:8000/api/projects`
-*   **Headers:** `Authorization: Bearer <token>`
-*   **Body (JSON):**
-    ```json
-    {
-      "customer_id": 1,
-      "name": "โครงการสั่งผลิตกระเป๋าผ้าลดโลกร้อน SCG ครบรอบ 110 ปี",
-      "sales_owner_id": 1,
-      "source": "Referral",
-      "status": "Inquiry",
-      "end_client_info": "กลุ่มลูกค้าทั่วไปและคู่ค้าของ SCG",
-      "estimated_value": 350000.00,
-      "target_delivery_date": "2026-10-31",
-      "special_instructions": "ต้องการโลโก้สีพิเศษและกล่องพลาสติกย่อยสลายได้"
-    }
-    ```
-*   **ผลลัพธ์ที่คาดหวัง:** ตอบกลับข้อมูลที่สร้างเสร็จ โดยมี `project_code` เป็น **`PPN-001`** (ระบบจะรันนิ่งเป็น `PPN-002`, `PPN-003` ตามลำดับถัดไปแบบเรียงกันโดยไม่ซ้ำซ้อน)
-
-#### 3.2 เพิ่มสินค้าเข้าไปในโปรเจกต์ (Add Product Item)
-*   **Method:** `POST`
-*   **URL:** `http://127.0.0.1:8000/api/projects/1/products`
-*   *(เปลี่ยนเลข `1` ตาม ID ของโครงการที่สร้างเสร็จ)*
-*   **Headers:** `Authorization: Bearer <token>`
-*   **Body (JSON):**
-    ```json
-    {
-      "name": "กระเป๋าผ้าแคนวาส 14 ออนซ์ หูหิ้วเชือกคอตตอน",
-      "qty": 5000,
-      "specs": "ขนาด 12x14x3 นิ้ว สีเบจธรรมชาติ สกรีนโลโก้ SCG 1 สีทองกากเพชร",
-      "target_date": "2026-10-15"
-    }
-    ```
-
-#### 3.3 เพิ่มคำขอเพิ่มเติมของลูกค้า (Add Additional Request)
-*   **Method:** `POST`
-*   **URL:** `http://127.0.0.1:8000/api/projects/1/additional-requests`
-*   **Headers:** `Authorization: Bearer <token>`
-*   **Body (JSON):**
-    ```json
-    {
-      "request_type": "Other",
-      "description": "ขอรับตัวอย่างผ้าตัวจริงมาลองสัมผัสเนื้อผิวภายใน 5 วัน",
-      "status": "Pending"
-    }
-    ```
-
-#### 3.4 อัปเดตสถานะของโครงการตามขั้นตอนจริง (Update Pipeline Status)
-เมื่อเปลี่ยนสถานะการทำงานจากสอบถามราคา → สั่งผลิตสินค้าตัวอย่าง ให้เปลี่ยนค่าสถานะผ่าน API
-*   **Method:** `PATCH`
-*   **URL:** `http://127.0.0.1:8000/api/projects/1/status`
-*   **Headers:** `Authorization: Bearer <token>`
-*   **Body (JSON):**
-    ```json
-    {
-      "status": "Sample"
-    }
-    ```
-*   **ผลลัพธ์ที่คาดหวัง:** ได้รับการยืนยันการบันทึกสำเร็จ และระบบจะสร้างล็อกการเข้าสู่ขั้นตอนตัวอย่างอัตโนมัติ
-
-#### 3.5 ตรวจสอบบันทึกกิจกรรมย้อนหลัง (Get Activity Logs)
-ดึงรายการความเคลื่อนไหวทั้งหมดว่าใครทำอะไรกับโปรเจกต์นี้บ้าง:
-*   **Method:** `GET`
-*   **URL:** `http://127.0.0.1:8000/api/projects/1/logs`
-*   **Headers:** `Authorization: Bearer <token>`
-*   **ผลลัพธ์ที่คาดหวัง:** จะเห็นประวัติการเปลี่ยนแปลงทั้งหมด ตั้งแต่การสร้างงาน, การเพิ่มสินค้า, และบันทึกการปรับสถานะเป็น `Sample`
-
----
-
-## 💻 ขั้นตอนที่ 4: สคริปต์รันการทดสอบอัตโนมัติด้วย PowerShell (รันปุ๊บรู้ผลทันที)
-
-หากต้องการความเร็วสูงสุดและไม่ต้องกรอก Postman ด้วยมือทีละตัว คุณสามารถเปิด **PowerShell** บน Windows และคัดลอกโค้ดทั้งหมดด้านล่างไปวางเพื่อรันระบบทดสอบได้ทันที:
-
-```powershell
-# 1. ล็อกอินเข้าใช้งานเพื่อดึง JWT Token
-$bodyAuth = @{ email = "admin@ppngreat.com"; password = "password123" } | ConvertTo-Json
-$resAuth = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/auth/login" -Method Post -Body $bodyAuth -ContentType "application/json; charset=utf-8"
-$token = $resAuth.data.token
-Write-Host ">>> เข้าสู่ระบบสำเร็จ ได้รับ Token แล้ว: Bearer $token" -ForegroundColor Green
-
-$headers = @{ Authorization = "Bearer $token" }
-
-# 2. บันทึกสร้างลูกค้า SCG
-$bodyCustomer = @{
-    name = "บริษัท ปูนซิเมนต์ไทย จำกัด (มหาชน)"
-    type = "Enterprise"
-    tax_id = "0105556000123"
-    industry = "Construction"
-    phone = "02-586-3333"
-    email = "info@scg.com"
-} | ConvertTo-Json
-$resCust = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/customers" -Method Post -Headers $headers -Body $bodyCustomer -ContentType "application/json; charset=utf-8"
-$custId = $resCust.data.id
-Write-Host ">>> บันทึกผู้ใช้สำเร็จ ID: $custId" -ForegroundColor Green
-
-# 3. เพิ่มผู้ติดต่อหลัก
-$bodyContact = @{
-    name = "คุณสมชาย รักชาติ"
-    position = "ผู้จัดการจัดซื้อ"
-    phone = "081-234-5678"
-    email = "somchai.r@scg.com"
-    is_primary = $true
-} | ConvertTo-Json
-$resContact = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/customers/$custId/contacts" -Method Post -Headers $headers -Body $bodyContact -ContentType "application/json; charset=utf-8"
-Write-Host ">>> เพิ่มผู้ติดต่อเรียบร้อย" -ForegroundColor Green
-
-# 4. สร้างโปรเจกต์และสินค้าพรีเมียม
-$bodyProject = @{
-    customer_id = $custId
-    name = "โครงการเสื้อยืดพรีเมียม SCG ครบรอบ 110 ปี"
-    sales_owner_id = 1
-    status = "Inquiry"
-    estimated_value = 180000.00
-} | ConvertTo-Json
-$resProj = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/projects" -Method Post -Headers $headers -Body $bodyProject -ContentType "application/json; charset=utf-8"
-$projId = $resProj.data.id
-Write-Host ">>> สร้างโปรเจกต์สำเร็จ รหัสโปรเจกต์: $($resProj.data.project_code)" -ForegroundColor Green
-
-# 5. เพิ่มสินค้าเข้าไปในโปรเจกต์
-$bodyProduct = @{
-    name = "เสื้อยืดโปโลเนื้อผ้าพรีเมียมพิมพ์ลายพิเศษ"
-    qty = 1000
-    specs = "เนื้อผ้าโปโลคอตตอนหนาพิเศษ ปักลายโลโก้ทอง"
-} | ConvertTo-Json
-$resProd = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/projects/$projId/products" -Method Post -Headers $headers -Body $bodyProduct -ContentType "application/json; charset=utf-8"
-Write-Host ">>> เพิ่มสินค้าพรีเมียมสำเร็จ: $($resProd.data.name)" -ForegroundColor Green
-
-# 6. ดึงข้อมูลประวัติกิจกรรมย้อนหลัง
-$resLogs = Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/projects/$projId/logs" -Method Get -Headers $headers
-Write-Host "`n>>> ประวัติการทำงานในโปรเจกต์ (Logs):" -ForegroundColor Cyan
-foreach ($log in $resLogs.data) {
-    Write-Host "[$($log.created_at)] โดยผู้ใช้งาน ID $($log.user_id): Action -> $($log.action)" -ForegroundColor Cyan
-}
-```
-
----
-
-## 🗄️ ขั้นตอนที่ 5: วิธีการตรวจสอบข้อมูลจริงในฐานข้อมูล (Database Validation)
-
-หลังจากทำการยิงทดสอบแล้ว คุณสามารถเขียน Query ด้านล่างเพื่อยืนยันว่าข้อมูลต่าง ๆ รวมไปถึง **ภาษาไทย** ถูกเซฟลงในตารางเรียบร้อยโดยไม่มีการแตกของตัวอักษร:
-
+หากต้องการเขียน SQL Query เข้าไปเช็คข้อมูลภาษาไทยหรือตัวเลขในฐานข้อมูล สามารถรันคำสั่งเหล่านี้ผ่าน phpMyAdmin ได้เลยครับ:
 ```sql
--- 1. ดูรายการลูกค้า
-SELECT id, name, type, tax_id, email FROM ppn_staging.customers;
+-- เช็คตารางลูกค้า
+SELECT id, name, type, tax_id FROM ppn_staging.customers;
 
--- 2. ดูผู้ติดต่อเชื่อมโยงกับลูกค้า
-SELECT id, customer_id, name, position, is_primary FROM ppn_staging.contact_people;
+-- เช็คความเคลื่อนไหวสต็อกสินค้า (IN / OUT)
+SELECT id, stock_item_id, movement_type, qty, notes FROM ppn_staging.stock_movements;
 
--- 3. ตรวจสอบโปรเจกต์และรหัส PPN อัตโนมัติ
-SELECT id, project_code, name, status, estimated_value FROM ppn_staging.projects;
+-- เช็คยอดจองและยอดสต็อกคงเหลือปัจจุบันในคลังสินค้า
+SELECT id, warehouse_id, qty_in_stock, qty_reserved FROM ppn_staging.stock_items;
 
--- 4. ตรวจสอบรายการสินค้าสเปกภาษาไทยในตาราง
-SELECT id, project_id, name, qty, specs FROM ppn_staging.product_items;
-
--- 5. ตรวจสอบประวัติการบันทึกกิจกรรม Log
-SELECT id, project_id, action, notes, created_at FROM ppn_staging.activity_logs ORDER BY id DESC;
+-- เช็ครายงานคำนวณกำไรสะสมในแต่ละโปรเจกต์
+SELECT id, project_code, order_value, deposit_paid, balance_paid FROM ppn_staging.projects;
 ```
+คู่มือนี้และระบบทดสอบรองรับการทำงานทั้งบนเครื่องโลคอลและการรันอัตโนมัติแล้ว 100% ครับ!
