@@ -1,0 +1,28 @@
+import 'package:flutter/material.dart';
+
+class ResponsiveLayout extends StatelessWidget {
+  final Widget webLayout;
+  final Widget mobileLayout;
+
+  const ResponsiveLayout({
+    super.key,
+    required this.webLayout,
+    required this.mobileLayout,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // ถ้าความกว้างจอน้อยกว่า 800 (ขนาดมือถือ/แท็บเล็ตแนวตั้ง) ให้แสดง UI มือถือ
+        if (constraints.maxWidth < 800) {
+          return mobileLayout;
+        }
+        // ถ้าจอใหญ่กว่านั้น ให้แสดง UI ของ Web/Desktop
+        else {
+          return webLayout;
+        }
+      },
+    );
+  }
+}
