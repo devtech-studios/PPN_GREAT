@@ -94,3 +94,7 @@ composer.lock
 package.json
 phpunit.xml
 vite.config.js
+
+# Newman Reports
+reports/
+
