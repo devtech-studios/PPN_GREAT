@@ -1394,7 +1394,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"quoted_price\": 250.00,\n  \"currency\": \"THB\",\n  \"lead_time\": \"20 วันหลังชำระเงินมัดจำ\",\n  \"moq\": 100,\n  \"remark\": \"รับประกันคุณภาพโครงไฟเบอร์ 1 ปี\"\n}"
+							"raw": "{\n  \"quoted_price\": 250.00,\n  \"currency\": \"THB\",\n  \"lead_time\": \"20 วันหลังชำระเงินมัดจำ\",\n  \"moq\": 100,\n  \"sample_price\": 15.00,\n  \"sample_lead_time\": \"7 days\",\n  \"sample_condition\": \"Refundable\",\n  \"remark\": \"รับประกันคุณภาพโครงไฟเบอร์ 1 ปี\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/quotes/public/{{session_token}}",
