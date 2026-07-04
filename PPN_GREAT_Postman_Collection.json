@@ -25,7 +25,18 @@
 									"    console.log('บันทึก access_token ลงใน Collection สำเร็จ:', cleanToken);",
 									"} else {",
 									"    console.error('ไม่พบ Token ในข้อมูลตอบกลับ หรือการล็อกอินไม่สำเร็จ');",
-									"}"
+									"}",
+									"",
+									"// Test Assertions",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Login response returns success as true\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"});",
+									"pm.test(\"JWT Token is returned in data\", function () {",
+									"    pm.expect(response.data.token).to.not.be.undefined;",
+									"});"
 								],
 								"type": "text/javascript",
 								"packages": {}
@@ -69,6 +80,25 @@
 				},
 				{
 					"name": "Get Current User Profile (me)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Profile data contains correct email\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.email).to.equal('admin@ppngreat.com');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [
@@ -96,36 +126,6 @@
 						}
 					},
 					"response": []
-				},
-				{
-					"name": "logout",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
-								"type": "text"
-							},
-							{
-								"key": "Accept",
-								"value": "application/json",
-								"type": "text"
-							}
-						],
-						"url": {
-							"raw": "{{base_url}}/api/auth/logout",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"auth",
-								"logout"
-							]
-						}
-					},
-					"response": []
 				}
 			]
 		},
@@ -134,6 +134,25 @@
 			"item": [
 				{
 					"name": "GET Customers (List + Search + Paginate)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Customers list format is correct\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [
@@ -178,7 +197,83 @@
 					"response": []
 				},
 				{
+					"name": "POST Create Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('customer_id', response.data.id);",
+									"    console.log('อัปเดตตัวแปร customer_id เป็น:', response.data.id);",
+									"}",
+									"",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"pm.test(\"Customer is created with correct name\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.name).to.include('ปูนซิเมนต์ไทย');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"บริษัท ปูนซิเมนต์ไทย จำกัด (มหาชน)\",\n  \"type\": \"Enterprise\",\n  \"tax_id\": \"0105556000123\",\n  \"industry\": \"Construction\",\n  \"lead_source\": \"Google Search\",\n  \"internal_note\": \"ลูกค้ารายใหญ่ ต้องการสั่งทำของพรีเมียมบ่อยครั้ง\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/customers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"customers"
+							]
+						}
+					},
+					"response": []
+				},
+				{
 					"name": "GET Customer Detail",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Customer detail matches dynamic ID\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.id).to.equal(parseInt(pm.collectionVariables.get('customer_id')));",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [
@@ -208,56 +303,26 @@
 					"response": []
 				},
 				{
-					"name": "POST Create Customer",
+					"name": "PUT Update Customer",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
 									"const response = pm.response.json();",
-									"if (response.success && response.data && response.data.id) {",
-									"    pm.collectionVariables.set('customer_id', response.data.id);",
-									"    console.log('อัปเดตตัวแปร customer_id เป็น:', response.data.id);",
-									"}"
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Customer information is updated\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.industry).to.equal('Construction Services');",
+									"});"
 								],
 								"type": "text/javascript",
 								"packages": {}
 							}
 						}
 					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
-								"type": "text"
-							},
-							{
-								"key": "Accept",
-								"value": "application/json",
-								"type": "text"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"name\": \"บริษัท ปูนซิเมนต์ไทย จำกัด (มหาชน)\",\n  \"type\": \"Enterprise\",\n  \"tax_id\": \"0105556000123\",\n  \"industry\": \"Construction\",\n  \"phone\": \"02-586-3333\",\n  \"email\": \"info@scg.com\",\n  \"website\": \"https://www.scg.com\",\n  \"lead_source\": \"Website\",\n  \"notes\": \"ลูกค้ารายใหญ่ ต้องการสั่งทำของพรีเมียมบ่อยครั้ง\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/api/customers",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"customers"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "PUT Update Customer",
 					"request": {
 						"method": "PUT",
 						"header": [
@@ -274,7 +339,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"บริษัท ปูนซิเมนต์ไทย จำกัด (มหาชน) - สำนักงานใหญ่\",\n  \"type\": \"Enterprise\",\n  \"tax_id\": \"0105556000123\",\n  \"industry\": \"Construction\",\n  \"phone\": \"02-586-3333\",\n  \"email\": \"procurement@scg.com\"\n}"
+							"raw": "{\n  \"name\": \"บริษัท ปูนซิเมนต์ไทย จำกัด (มหาชน) - สำนักงานใหญ่\",\n  \"type\": \"Enterprise\",\n  \"tax_id\": \"0105556000123\",\n  \"industry\": \"Construction Services\"\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/customers/{{customer_id}}",
@@ -301,7 +366,15 @@
 									"if (response.success && response.data && response.data.id) {",
 									"    pm.collectionVariables.set('contact_id', response.data.id);",
 									"    console.log('อัปเดตตัวแปร contact_id เป็น:', response.data.id);",
-									"}"
+									"}",
+									"",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"pm.test(\"Contact person matches SCG contact name\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.name).to.equal('คุณสมชาย รักชาติ');",
+									"});"
 								],
 								"type": "text/javascript",
 								"packages": {}
@@ -343,6 +416,25 @@
 				},
 				{
 					"name": "PUT Update Contact Person",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Contact person name is updated\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.name).to.equal('คุณสมชาย รักชาติไทย');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "PUT",
 						"header": [
@@ -379,6 +471,25 @@
 				},
 				{
 					"name": "DELETE Contact Person",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Contact person is deleted successfully\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.message).to.include('สำเร็จ');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "DELETE",
 						"header": [
@@ -411,6 +522,25 @@
 				},
 				{
 					"name": "POST Add Shipping Address",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"pm.test(\"Shipping address recipient is correct\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.label).to.equal('ฝ่ายคลังสินค้า SCG บางซื่อ');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [
@@ -427,7 +557,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"recipient_name\": \"ฝ่ายคลังสินค้า SCG บางซื่อ\",\n  \"phone\": \"02-586-4444\",\n  \"address_line1\": \"1 ถนนปูนซิเมนต์ไทย\",\n  \"address_line2\": \"แขวงบางซื่อ เขตบางซื่อ\",\n  \"province\": \"กรุงเทพมหานคร\",\n  \"postal_code\": \"10800\",\n  \"is_default\": true\n}"
+							"raw": "{\n  \"label\": \"ฝ่ายคลังสินค้า SCG บางซื่อ\",\n  \"address\": \"1 ถนนปูนซิเมนต์ไทย แขวงบางซื่อ เขตบางซื่อ กรุงเทพมหานคร 10800\",\n  \"is_default\": true\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/customers/{{customer_id}}/addresses",
@@ -446,6 +576,25 @@
 				},
 				{
 					"name": "GET Customer Stats",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Customer statistics data fields are valid\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.payment_on_time).to.be.a('number');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [
@@ -482,6 +631,25 @@
 			"item": [
 				{
 					"name": "GET Projects (List + Filter)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Projects list format is valid array\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [
@@ -509,7 +677,7 @@
 								{
 									"key": "status",
 									"value": "Inquiry",
-									"description": "คัดกรองตามสถานะ (Inquiry, Sample, Production, Completed)"
+									"description": "คัดกรองตามสถานะ (Inquiry, Sample, Production, Shipping, Distributing, Delivered, Cancelled)"
 								}
 							]
 						}
@@ -517,7 +685,83 @@
 					"response": []
 				},
 				{
+					"name": "POST Create Project",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('project_id', response.data.id);",
+									"    console.log('อัปเดตตัวแปร project_id เป็น:', response.data.id);",
+									"}",
+									"",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"pm.test(\"Project code auto-generates correctly\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.project_code).to.match(/PPN-\\d+/);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"customer_id\": {{customer_id}},\n  \"priority\": 2,\n  \"is_repeat_order\": false,\n  \"order_value\": 350000.00,\n  \"credit_term\": \"30 Days\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/projects",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects"
+							]
+						}
+					},
+					"response": []
+				},
+				{
 					"name": "GET Project Detail",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Project details match expected project_id\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.id).to.equal(parseInt(pm.collectionVariables.get('project_id')));",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [
@@ -547,56 +791,26 @@
 					"response": []
 				},
 				{
-					"name": "POST Create Project",
+					"name": "PUT Update Project",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
 									"const response = pm.response.json();",
-									"if (response.success && response.data && response.data.id) {",
-									"    pm.collectionVariables.set('project_id', response.data.id);",
-									"    console.log('อัปเดตตัวแปร project_id เป็น:', response.data.id);",
-									"}"
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Project value is updated\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(parseFloat(response.data.order_value)).to.equal(380000.00);",
+									"});"
 								],
 								"type": "text/javascript",
 								"packages": {}
 							}
 						}
 					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json; charset=utf-8",
-								"type": "text"
-							},
-							{
-								"key": "Accept",
-								"value": "application/json",
-								"type": "text"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"customer_id\": {{customer_id}},\n  \"name\": \"โครงการสั่งผลิตกระเป๋าผ้าลดโลกร้อน SCG ครบรอบ 110 ปี\",\n  \"sales_owner_id\": 1,\n  \"source\": \"Referral\",\n  \"status\": \"Inquiry\",\n  \"end_client_info\": \"กลุ่มลูกค้าทั่วไปและคู่ค้าของ SCG\",\n  \"estimated_value\": 350000.00,\n  \"target_delivery_date\": \"2026-10-31\",\n  \"special_instructions\": \"ต้องการโลโก้สีพิเศษและกล่องพลาสติกย่อยสลายได้\"\n}"
-						},
-						"url": {
-							"raw": "{{base_url}}/api/projects",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"projects"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "PUT Update Project",
 					"request": {
 						"method": "PUT",
 						"header": [
@@ -613,7 +827,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"โครงการสั่งผลิตกระเป๋าผ้าลดโลกร้อน SCG ครบรอบ 110 ปี (ปรับปรุงขอบเขต)\",\n  \"estimated_value\": 380000.00\n}"
+							"raw": "{\n  \"order_value\": 380000.00\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/projects/{{project_id}}",
@@ -631,6 +845,25 @@
 				},
 				{
 					"name": "PATCH Update Project Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Project status changed to Sample\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.status).to.equal('Sample');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "PATCH",
 						"header": [
@@ -675,7 +908,15 @@
 									"if (response.success && response.data && response.data.id) {",
 									"    pm.collectionVariables.set('product_item_id', response.data.id);",
 									"    console.log('อัปเดตตัวแปร product_item_id เป็น:', response.data.id);",
-									"}"
+									"}",
+									"",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"pm.test(\"Product item name is registered\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.name).to.include('กระเป๋าผ้าแคนวาส');",
+									"});"
 								],
 								"type": "text/javascript",
 								"packages": {}
@@ -717,6 +958,25 @@
 				},
 				{
 					"name": "PUT Update Product Item",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Product item quantity is updated\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.qty).to.equal(5500);",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "PUT",
 						"header": [
@@ -753,6 +1013,25 @@
 				},
 				{
 					"name": "POST Add Additional Request",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"pm.test(\"Additional request is created successfully\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data.description).to.include('ตัวอย่าง');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "POST",
 						"header": [
@@ -769,7 +1048,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"request_type\": \"Other\",\n  \"description\": \"ขอรับตัวอย่างผ้าตัวจริงมาลองสัมผัสเนื้อผิวภายใน 5 วัน\",\n  \"status\": \"Pending\"\n}"
+							"raw": "{\n  \"description\": \"ขอรับตัวอย่างผ้าตัวจริงมาลองสัมผัสเนื้อผิวภายใน 5 วัน\",\n  \"cost\": 500.00\n}"
 						},
 						"url": {
 							"raw": "{{base_url}}/api/projects/{{project_id}}/additional-requests",
@@ -788,6 +1067,25 @@
 				},
 				{
 					"name": "GET Project Logs",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"pm.test(\"Logs contain a valid array list\", function () {",
+									"    pm.expect(response.success).to.be.true;",
+									"    pm.expect(response.data).to.be.an('array');",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [
@@ -818,6 +1116,55 @@
 					"response": []
 				}
 			]
+		},
+		{
+			"name": "logout",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"const response = pm.response.json();",
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"pm.test(\"Logout message is successful\", function () {",
+							"    pm.expect(response.success).to.be.true;",
+							"    pm.expect(response.message).to.include('ออก');",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json; charset=utf-8",
+						"type": "text"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/auth/logout",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"auth",
+						"logout"
+					]
+				}
+			},
+			"response": []
 		}
 	],
 	"auth": {
