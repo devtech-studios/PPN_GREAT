@@ -23,15 +23,15 @@
 
 ### วัน 1: Foundation
 
-- [ ] Setup Laravel Project + .env
-- [ ] ตั้งค่า CORS สำหรับ Flutter Web
-- [ ] ติดตั้ง JWT Auth (tymon/jwt-auth)
-- [ ] สร้าง Migration 26 ตาราง → รัน migrate สำเร็จ
-- [ ] สร้าง Seeder (Super Admin user)
-- [ ] API: POST /api/auth/login ✅
-- [ ] API: POST /api/auth/logout ✅
-- [ ] API: GET /api/auth/me ✅
-- [ ] ทดสอบ Login ด้วย Postman/Thunder Client
+- [x] Setup Laravel Project + .env
+- [x] ตั้งค่า CORS สำหรับ Flutter Web
+- [x] ติดตั้ง JWT Auth (tymon/jwt-auth)
+- [x] สร้าง Migration 26 ตาราง → รัน migrate สำเร็จ
+- [x] สร้าง Seeder (Super Admin user)
+- [x] API: POST /api/auth/login ✅
+- [x] API: POST /api/auth/logout ✅
+- [x] API: GET /api/auth/me ✅
+- [x] ทดสอบ Login ด้วย Postman/Thunder Client
 
 ### วัน 2: Core — Customers + Projects
 
@@ -57,13 +57,13 @@
 ### ✅ Phase 1 Deliverables (ส่งมอบเมื่อจบ Phase)
 
 ```
-☑ Login API ทำงานได้ → ตอบ JWT Token กลับมา
-☑ CRUD ลูกค้าครบ → สร้าง/แก้ไข/ดูรายชื่อ/ค้นหา
-☑ CRUD โปรเจกต์ครบ → สร้าง/แก้ไข/เปลี่ยนสถานะ
-☑ Auto-generate Project Code: PPN-001, PPN-002...
-☑ Activity Log บันทึกทุกการเปลี่ยนแปลง
-☑ Push code → branch: backend
-☑ สร้าง Pull Request → main
+- [x] Login API ทำงานได้ → ตอบ JWT Token กลับมา
+- [x] CRUD ลูกค้าครบ → สร้าง/แก้ไข/ดูรายชื่อ/ค้นหา
+- [x] CRUD โปรเจกต์ครบ → สร้าง/แก้ไข/เปลี่ยนสถานะ
+- [x] Auto-generate Project Code: PPN-001, PPN-002...
+- [x] Activity Log บันทึกทุกการเปลี่ยนแปลง
+- [x] Push code → branch: backend
+- [x] สร้าง Pull Request → main
 ```
 
 ### 📸 หลักฐานรายงาน Phase 1:
