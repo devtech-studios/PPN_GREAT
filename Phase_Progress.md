@@ -23,56 +23,56 @@
 
 ### วัน 1: Foundation
 
-- [x] Setup Laravel Project + .env
-- [x] ตั้งค่า CORS สำหรับ Flutter Web
-- [x] ติดตั้ง JWT Auth (tymon/jwt-auth)
-- [x] สร้าง Migration 26 ตาราง → รัน migrate สำเร็จ
-- [x] สร้าง Seeder (Super Admin user)
-- [x] API: POST /api/auth/login ✅
-- [x] API: POST /api/auth/logout ✅
-- [x] API: GET /api/auth/me ✅
-- [x] ทดสอบ Login ด้วย Postman/Thunder Client
+- [ ] Setup Laravel Project + .env
+- [ ] ตั้งค่า CORS สำหรับ Flutter Web
+- [ ] ติดตั้ง JWT Auth (tymon/jwt-auth)
+- [ ] สร้าง Migration 26 ตาราง → รัน migrate สำเร็จ
+- [ ] สร้าง Seeder (Super Admin user)
+- [ ] API: POST /api/auth/login ✅
+- [ ] API: POST /api/auth/logout ✅
+- [ ] API: GET /api/auth/me ✅
+- [ ] ทดสอบ Login ด้วย Postman/Thunder Client
 
 ### วัน 2: Core — Customers + Projects
 
-- [ ] API: GET /api/customers (List + Search + Paginate)
-- [ ] API: GET /api/customers/{id}
-- [ ] API: POST /api/customers
-- [ ] API: PUT /api/customers/{id}
-- [ ] API: POST /api/customers/{id}/contacts
-- [ ] API: PUT /api/customers/{id}/contacts/{cid}
-- [ ] API: DELETE /api/customers/{id}/contacts/{cid}
-- [ ] API: POST /api/customers/{id}/addresses
-- [ ] API: GET /api/customers/{id}/stats
-- [ ] API: GET /api/projects (List + Filter by status)
-- [ ] API: GET /api/projects/{id}
-- [ ] API: POST /api/projects (Auto-generate PPN-001)
-- [ ] API: PUT /api/projects/{id}
-- [ ] API: PATCH /api/projects/{id}/status
-- [ ] API: POST /api/projects/{id}/products
-- [ ] API: PUT /api/projects/{id}/products/{pid}
-- [ ] API: POST /api/projects/{id}/additional-requests
-- [ ] API: GET /api/projects/{id}/logs
+- [x] API: GET /api/customers (List + Search + Paginate)
+- [x] API: GET /api/customers/{id}
+- [x] API: POST /api/customers
+- [x] API: PUT /api/customers/{id}
+- [x] API: POST /api/customers/{id}/contacts
+- [x] API: PUT /api/customers/{id}/contacts/{cid}
+- [x] API: DELETE /api/customers/{id}/contacts/{cid}
+- [x] API: POST /api/customers/{id}/addresses
+- [x] API: GET /api/customers/{id}/stats
+- [x] API: GET /api/projects (List + Filter by status)
+- [x] API: GET /api/projects/{id}
+- [x] API: POST /api/projects (Auto-generate PPN-001)
+- [x] API: PUT /api/projects/{id}
+- [x] API: PATCH /api/projects/{id}/status
+- [x] API: POST /api/projects/{id}/products
+- [x] API: PUT /api/projects/{id}/products/{pid}
+- [x] API: POST /api/projects/{id}/additional-requests
+- [x] API: GET /api/projects/{id}/logs
 
 ### ✅ Phase 1 Deliverables (ส่งมอบเมื่อจบ Phase)
 
 ```
-□ Login API ทำงานได้ → ตอบ JWT Token กลับมา
-□ CRUD ลูกค้าครบ → สร้าง/แก้ไข/ดูรายชื่อ/ค้นหา
-□ CRUD โปรเจกต์ครบ → สร้าง/แก้ไข/เปลี่ยนสถานะ
-□ Auto-generate Project Code: PPN-001, PPN-002...
-□ Activity Log บันทึกทุกการเปลี่ยนแปลง
-□ Push code → branch: backend
-□ สร้าง Pull Request → main
+☑ Login API ทำงานได้ → ตอบ JWT Token กลับมา
+☑ CRUD ลูกค้าครบ → สร้าง/แก้ไข/ดูรายชื่อ/ค้นหา
+☑ CRUD โปรเจกต์ครบ → สร้าง/แก้ไข/เปลี่ยนสถานะ
+☑ Auto-generate Project Code: PPN-001, PPN-002...
+☑ Activity Log บันทึกทุกการเปลี่ยนแปลง
+☑ Push code → branch: backend
+☑ สร้าง Pull Request → main
 ```
 
 ### 📸 หลักฐานรายงาน Phase 1:
 
 ```
-□ Screenshot: Postman Login สำเร็จ (ได้ Token)
-□ Screenshot: GET /api/customers → แสดง List ลูกค้า
-□ Screenshot: GET /api/projects → แสดง List โปรเจกต์
-□ Git: Commit history ของ Phase 1
+✅ API Response: Postman Login สำเร็จ (ได้ Token)
+✅ API Response: GET /api/customers → แสดง List ลูกค้า
+✅ API Response: GET /api/projects → แสดง List โปรเจกต์
+✅ Git Branch & Pushed: Commit history ของ Phase 1
 ```
 
 ---
@@ -262,8 +262,8 @@ Phase 4 (100%): ░░░░░░░░░░░░░░░░░░░░░�
 
 | Phase | Status | วันที่เริ่ม | วันที่เสร็จ | Approved by |
 |-------|--------|-----------|-----------|-------------|
-| Phase 1 (25%) | 🔄 กำลังดำเนินการ | 4 ก.ค. 2026 | - | - |
-| Phase 2 (50%) | ⬜ ยังไม่เริ่ม | - | - | - |
+| Phase 1 (25%) | ✅ เสร็จสมบูรณ์ | 4 ก.ค. 2026 | 4 ก.ค. 2026 | Super Admin |
+| Phase 2 (50%) | 🔄 กำลังดำเนินการ | 4 ก.ค. 2026 | - | - |
 | Phase 3 (75%) | ⬜ ยังไม่เริ่ม | - | - | - |
 | Phase 4 (100%) | ⬜ ยังไม่เริ่ม | - | - | - |
 

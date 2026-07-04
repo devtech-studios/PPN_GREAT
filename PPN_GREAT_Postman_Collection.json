@@ -1,0 +1,885 @@
+{
+	"info": {
+		"_postman_id": "ppn-great-api-collection-v1",
+		"name": "PPN GREAT API",
+		"description": "Postman Collection สำหรับทดสอบ API ของระบบ PPN GREAT (Auth, Customers, Projects) มีสคริปต์ดึงและบันทึก JWT Token อัตโนมัติ",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.token) {",
+									"    const token = response.data.token;",
+									"    const cleanToken = String(token).replace(/^Bearer\\s+/i, '').trim();",
+									"    // บันทึก access_token ลงใน Collection Variable อัตโนมัติ",
+									"    pm.collectionVariables.set('access_token', cleanToken);",
+									"    console.log('บันทึก access_token ลงใน Collection สำเร็จ:', cleanToken);",
+									"} else {",
+									"    console.error('ไม่พบ Token ในข้อมูลตอบกลับ หรือการล็อกอินไม่สำเร็จ');",
+									"}"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"admin@ppngreat.com\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User Profile (me)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/auth/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"me"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "logout",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/auth/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"logout"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Customer",
+			"item": [
+				{
+					"name": "GET Customers (List + Search + Paginate)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/customers?search=SCG&type=Enterprise&page=1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"customers"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "SCG",
+									"description": "ค้นหาด้วยชื่อหรือเลขประจำตัวผู้เสียภาษี"
+								},
+								{
+									"key": "type",
+									"value": "Enterprise",
+									"description": "คัดกรองตามประเภทลูกค้า (Enterprise, SMB, Individual)"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET Customer Detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/customers/{{customer_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"customers",
+								"{{customer_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Customer",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('customer_id', response.data.id);",
+									"    console.log('อัปเดตตัวแปร customer_id เป็น:', response.data.id);",
+									"}"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"บริษัท ปูนซิเมนต์ไทย จำกัด (มหาชน)\",\n  \"type\": \"Enterprise\",\n  \"tax_id\": \"0105556000123\",\n  \"industry\": \"Construction\",\n  \"phone\": \"02-586-3333\",\n  \"email\": \"info@scg.com\",\n  \"website\": \"https://www.scg.com\",\n  \"lead_source\": \"Website\",\n  \"notes\": \"ลูกค้ารายใหญ่ ต้องการสั่งทำของพรีเมียมบ่อยครั้ง\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/customers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"customers"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT Update Customer",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"บริษัท ปูนซิเมนต์ไทย จำกัด (มหาชน) - สำนักงานใหญ่\",\n  \"type\": \"Enterprise\",\n  \"tax_id\": \"0105556000123\",\n  \"industry\": \"Construction\",\n  \"phone\": \"02-586-3333\",\n  \"email\": \"procurement@scg.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/customers/{{customer_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"customers",
+								"{{customer_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Add Contact Person",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('contact_id', response.data.id);",
+									"    console.log('อัปเดตตัวแปร contact_id เป็น:', response.data.id);",
+									"}"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"คุณสมชาย รักชาติ\",\n  \"position\": \"ผู้จัดการฝ่ายจัดซื้อ\",\n  \"phone\": \"081-234-5678\",\n  \"email\": \"somchai.r@scg.com\",\n  \"line_id\": \"somchai_scg\",\n  \"is_primary\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/customers/{{customer_id}}/contacts",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"customers",
+								"{{customer_id}}",
+								"contacts"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT Update Contact Person",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"คุณสมชาย รักชาติไทย\",\n  \"position\": \"ผู้อำนวยการจัดซื้อ\",\n  \"phone\": \"081-234-5678\",\n  \"email\": \"somchai.r@scg.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/customers/{{customer_id}}/contacts/{{contact_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"customers",
+								"{{customer_id}}",
+								"contacts",
+								"{{contact_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "DELETE Contact Person",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/customers/{{customer_id}}/contacts/{{contact_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"customers",
+								"{{customer_id}}",
+								"contacts",
+								"{{contact_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Add Shipping Address",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"recipient_name\": \"ฝ่ายคลังสินค้า SCG บางซื่อ\",\n  \"phone\": \"02-586-4444\",\n  \"address_line1\": \"1 ถนนปูนซิเมนต์ไทย\",\n  \"address_line2\": \"แขวงบางซื่อ เขตบางซื่อ\",\n  \"province\": \"กรุงเทพมหานคร\",\n  \"postal_code\": \"10800\",\n  \"is_default\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/customers/{{customer_id}}/addresses",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"customers",
+								"{{customer_id}}",
+								"addresses"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET Customer Stats",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/customers/{{customer_id}}/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"customers",
+								"{{customer_id}}",
+								"stats"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Project",
+			"item": [
+				{
+					"name": "GET Projects (List + Filter)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/projects?status=Inquiry",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "Inquiry",
+									"description": "คัดกรองตามสถานะ (Inquiry, Sample, Production, Completed)"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET Project Detail",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Create Project",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('project_id', response.data.id);",
+									"    console.log('อัปเดตตัวแปร project_id เป็น:', response.data.id);",
+									"}"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"customer_id\": {{customer_id}},\n  \"name\": \"โครงการสั่งผลิตกระเป๋าผ้าลดโลกร้อน SCG ครบรอบ 110 ปี\",\n  \"sales_owner_id\": 1,\n  \"source\": \"Referral\",\n  \"status\": \"Inquiry\",\n  \"end_client_info\": \"กลุ่มลูกค้าทั่วไปและคู่ค้าของ SCG\",\n  \"estimated_value\": 350000.00,\n  \"target_delivery_date\": \"2026-10-31\",\n  \"special_instructions\": \"ต้องการโลโก้สีพิเศษและกล่องพลาสติกย่อยสลายได้\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/projects",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT Update Project",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"โครงการสั่งผลิตกระเป๋าผ้าลดโลกร้อน SCG ครบรอบ 110 ปี (ปรับปรุงขอบเขต)\",\n  \"estimated_value\": 380000.00\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PATCH Update Project Status",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"status\": \"Sample\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Add Product Item",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const response = pm.response.json();",
+									"if (response.success && response.data && response.data.id) {",
+									"    pm.collectionVariables.set('product_item_id', response.data.id);",
+									"    console.log('อัปเดตตัวแปร product_item_id เป็น:', response.data.id);",
+									"}"
+								],
+								"type": "text/javascript",
+								"packages": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"กระเป๋าผ้าแคนวาส 14 ออนซ์ หูหิ้วเชือกคอตตอน\",\n  \"qty\": 5000,\n  \"specs\": \"ขนาด 12x14x3 นิ้ว สีเบจธรรมชาติ สกรีนโลโก้ SCG 1 สีทองกากเพชร\",\n  \"target_date\": \"2026-10-15\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/products",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"products"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "PUT Update Product Item",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"กระเป๋าผ้าแคนวาส 14 ออนซ์ หูหิ้วเชือกคอตตอนรุ่นปรับปรุง\",\n  \"qty\": 5500,\n  \"specs\": \"ขนาด 12x14x3 นิ้ว สกรีน 2 สีทองและสีเงิน\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/products/{{product_item_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"products",
+								"{{product_item_id}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "POST Add Additional Request",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"request_type\": \"Other\",\n  \"description\": \"ขอรับตัวอย่างผ้าตัวจริงมาลองสัมผัสเนื้อผิวภายใน 5 วัน\",\n  \"status\": \"Pending\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/additional-requests",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"additional-requests"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "GET Project Logs",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json; charset=utf-8",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/logs",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"logs"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{access_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://127.0.0.1:8000",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "customer_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "contact_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "project_id",
+			"value": "1",
+			"type": "string"
+		},
+		{
+			"key": "product_item_id",
+			"value": "1",
+			"type": "string"
+		}
+	]
+}
