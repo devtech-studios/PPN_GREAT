@@ -1,8 +1,9 @@
-# 📊 PPN GREAT — 4 Phase Progress Tracking
+# 📊 PPN GREAT — 4 Phase Combined Progress Tracking
 
-> **เป้าหมาย:** ติดตามความคืบหน้า 4 ช่วง (25% → 50% → 75% → 100%)  
-> **ใช้สำหรับ:** รายงานความก้าวหน้าให้ลูกค้า + หัวหน้า  
+> **เป้าหมาย:** ติดตามความคืบหน้า 4 ช่วง (25% → 50% → 75% → 100%) ตั้งแต่เริ่มสร้าง Backend API จนถึง Deploy Production + Security Testing
+> **ใช้สำหรับ:** รายงานความก้าวหน้าการพัฒนาและการทดสอบระบบต่อลูกค้า + หัวหน้า
 > **อัปเดตโดย:** ทีมพัฒนา (ติ๊ก ✅ เมื่อเสร็จ)
+> **ระยะเวลา:** 14 วัน (1 – 14 กรกฎาคม 2026)
 
 ---
 
@@ -10,243 +11,96 @@
 
 | Phase | ช่วง | วัน | ความคืบหน้า | สิ่งที่ส่งมอบ |
 |-------|------|-----|-----------|-------------|
-| **Phase 1** | Foundation + Core | วัน 1-2 | **0% → 25%** | Login ได้ + CRUD ลูกค้า/โปรเจกต์ |
-| **Phase 2** | Supply Chain | วัน 3-4 | **25% → 50%** | Supplier + Finance ครบ |
-| **Phase 3** | Production Flow | วัน 5-6 | **50% → 75%** | Sample/Artwork/Container/Delivery |
-| **Phase 4** | Complete + Deploy | วัน 7-8 | **75% → 100%** | Dashboard + Reports + Go Live |
+| **Phase 1** | Core ERP Foundation & CRM | วัน 1-3 (1-3 ก.ค. 2026) | **เสร็จสมบูรณ์** ✅ (100%) | Setup + JWT Auth + CRUD ลูกค้า + CRUD โปรเจกต์ |
+| **Phase 2** | Supply Chain, Finance & Logistics | วัน 4-7 (4-7 ก.ค. 2026) | **รอดำเนินการ** ⏳ (0%) | Supplier + ขอราคา + บิลจ่ายเงิน + เอกสารการเงิน + ตู้สินค้า + คลัง/จัดส่ง |
+| **Phase 3** | Dashboard, Reports & Frontend Integration | วัน 8-10 (8-10 ก.ค. 2026) | **รอดำเนินการ** ⏳ (0%) | Dashboard + Reports + เชื่อม API กับ Flutter + Polish |
+| **Phase 4** | Production Deploy & OWASP Security Testing | วัน 11-14 (11-14 ก.ค. 2026) | **รอดำเนินการ** ⏳ (0%) | Deploy เซิร์ฟเวอร์จริง + ทดสอบความถูกต้อง + ทดสอบความปลอดภัย OWASP Top 10:2025 |
 
 ---
 
-## 🟡 Phase 1: Foundation + Core (25%)
-> **วัน 1-2 (4-5 ก.ค. 2026)**  
-> **เป้าหมาย:** ระบบ Login + CRUD ลูกค้า + CRUD โปรเจกต์
+## 🟢 Phase 1: Core ERP Foundation & CRM (25%)
+> **วัน 1-3 (1-3 ก.ค. 2026)**
+> **สถานะ:** เสร็จสมบูรณ์ ✅ (100%)
+> **เป้าหมาย:** ติดตั้ง Laravel Project, ตั้งค่า Authentication (JWT) และระบบ CRUD ลูกค้าและโปรเจกต์
 
-### วัน 1: Foundation
+- [x] Setup Laravel Project + .env + CORS สำหรับเชื่อมต่อ Flutter Web
+- [x] ติดตั้งและตั้งค่า JWT Auth (tymon/jwt-auth) พร้อมทดสอบ Login/Logout/Me
+- [x] สร้างฐานข้อมูลเริ่มต้น (Migrations 26 ตาราง & Seeder สำหรับ Super Admin)
+- [x] พัฒนา CRUD APIs สำหรับข้อมูลลูกค้า (Customer, Contacts, Shipping Addresses) พร้อมระบบเก็บสถิติลูกค้า
+- [x] พัฒนา CRUD APIs สำหรับโปรเจกต์ (Project, Product Items, Additional Requests)
+- [x] พัฒนาระบบเลื่อนสถานะโปรเจกต์ (Pipeline) และสร้างรหัสโปรเจกต์อัตโนมัติ (PPN-001, PPN-002...)
+- [x] พัฒนาระบบบันทึกกิจกรรมประวัติการเปลี่ยนแปลง (Activity Log)
 
-- [ ] Setup Laravel Project + .env
-- [ ] ตั้งค่า CORS สำหรับ Flutter Web
-- [ ] ติดตั้ง JWT Auth (tymon/jwt-auth)
-- [ ] สร้าง Migration 26 ตาราง → รัน migrate สำเร็จ
-- [ ] สร้าง Seeder (Super Admin user)
-- [ ] API: POST /api/auth/login ✅
-- [ ] API: POST /api/auth/logout ✅
-- [ ] API: GET /api/auth/me ✅
-- [ ] ทดสอบ Login ด้วย Postman/Thunder Client
-
-### วัน 2: Core — Customers + Projects
-
-- [ ] API: GET /api/customers (List + Search + Paginate)
-- [ ] API: GET /api/customers/{id}
-- [ ] API: POST /api/customers
-- [ ] API: PUT /api/customers/{id}
-- [ ] API: POST /api/customers/{id}/contacts
-- [ ] API: PUT /api/customers/{id}/contacts/{cid}
-- [ ] API: DELETE /api/customers/{id}/contacts/{cid}
-- [ ] API: POST /api/customers/{id}/addresses
-- [ ] API: GET /api/customers/{id}/stats
-- [ ] API: GET /api/projects (List + Filter by status)
-- [ ] API: GET /api/projects/{id}
-- [ ] API: POST /api/projects (Auto-generate PPN-001)
-- [ ] API: PUT /api/projects/{id}
-- [ ] API: PATCH /api/projects/{id}/status
-- [ ] API: POST /api/projects/{id}/products
-- [ ] API: PUT /api/projects/{id}/products/{pid}
-- [ ] API: POST /api/projects/{id}/additional-requests
-- [ ] API: GET /api/projects/{id}/logs
-
-### ✅ Phase 1 Deliverables (ส่งมอบเมื่อจบ Phase)
-
+### ✅ Phase 1 Deliverables (ส่งมอบแล้ว)
 ```
-□ Login API ทำงานได้ → ตอบ JWT Token กลับมา
-□ CRUD ลูกค้าครบ → สร้าง/แก้ไข/ดูรายชื่อ/ค้นหา
-□ CRUD โปรเจกต์ครบ → สร้าง/แก้ไข/เปลี่ยนสถานะ
-□ Auto-generate Project Code: PPN-001, PPN-002...
-□ Activity Log บันทึกทุกการเปลี่ยนแปลง
-□ Push code → branch: backend
-□ สร้าง Pull Request → main
-```
-
-### 📸 หลักฐานรายงาน Phase 1:
-
-```
-□ Screenshot: Postman Login สำเร็จ (ได้ Token)
-□ Screenshot: GET /api/customers → แสดง List ลูกค้า
-□ Screenshot: GET /api/projects → แสดง List โปรเจกต์
-□ Git: Commit history ของ Phase 1
+- [x] ระบบ Login และสิทธิ์การใช้งาน (JWT Token) — 3 endpoints
+- [x] ระบบจัดการลูกค้าและประวัติผู้ติดต่อแบบบูรณาการ — 9 endpoints
+- [x] ระบบโปรเจกต์และ Pipeline คุมสถานะสินค้าและคำขอเพิ่มเติม — 9 endpoints
+- [x] โค้ดทั้งหมด Push ขึ้น branch: backend และ Merge เข้า main
 ```
 
 ---
 
-## 🟠 Phase 2: Supply Chain (50%)
-> **วัน 3-4 (6-7 ก.ค. 2026)**  
-> **เป้าหมาย:** Supplier + Quote + Bills + Finance Documents + Payments
+## 🟡 Phase 2: Supply Chain, Finance & Logistics (50%)
+> **วัน 4-7 (4-7 ก.ค. 2026)**
+> **สถานะ:** รอดำเนินการ ⏳ (0%)
+> **เป้าหมาย:** ระบบจัดซื้อ (Supplier), ออกเอกสารการเงินเรียกเก็บเงิน/จ่ายเงิน, ระบบติดตามตู้สินค้า และจัดการคลังสินค้า/จัดส่งตัดสต็อก
 
-### วัน 3: Suppliers ครบ
+- [ ] พัฒนา CRUD APIs สำหรับ Supplier และระบบขอราคา (Quote Requests)
+- [ ] พัฒนาระบบแชร์ลิงก์ให้ Supplier กรอกราคาด้วยตนเอง (Public Guest Quote Price Input)
+- [ ] พัฒนาระบบขอตัวอย่างสินค้าจากโรงงานจีน (Supplier Samples) และจัดการบิลค่าใช้จ่าย/แนบเอกสาร (Supplier Bills - AP)
+- [ ] พัฒนา Client Samples (ส่งตัวอย่างให้ลูกค้า + Multi-attempt + Dual Tracking)
+- [ ] พัฒนาระบบ Artwork Tracking (Version Management + File Upload)
+- [ ] พัฒนาตัวช่วยสร้างเอกสารการเงินอัตโนมัติ (DocNumberService: QU, PI, DP, CI) คำนวณวันครบกำหนดตาม Term
+- [ ] พัฒนาระบบบันทึกรับเงินลูกค้า (Payments - AR) พร้อมช่องทางอัปโหลดสลิปเงินโอน
+- [ ] พัฒนาระบบติดตามตู้สินค้า (Containers) เชื่อมหลายโปรเจกต์
+- [ ] พัฒนาระบบคลังสินค้า (Inventory) และประวัติการเคลื่อนไหวสต็อก
+- [ ] พัฒนาระบบจัดรอบส่งมอบสินค้า (Dispatch Round) และตัดสต็อกด้วย Atomic Transaction
 
-- [ ] API: GET /api/suppliers
-- [ ] API: GET /api/suppliers/{id}
-- [ ] API: POST /api/suppliers
-- [ ] API: PUT /api/suppliers/{id}
-- [ ] API: GET /api/suppliers/{id}/quotes
-- [ ] API: POST /api/suppliers/{id}/quotes
-- [ ] API: PUT /api/suppliers/{id}/quotes/{qid}
-- [ ] API: PATCH /api/suppliers/{id}/quotes/{qid}/status
-- [ ] API: POST /api/suppliers/{id}/quotes/{qid}/generate-link
-- [ ] API: GET /api/suppliers/{id}/samples
-- [ ] API: POST /api/suppliers/{id}/samples
-- [ ] API: PUT /api/suppliers/{id}/samples/{sid}
-- [ ] API: PATCH /api/suppliers/{id}/samples/{sid}/status
-- [ ] API: GET /api/suppliers/{id}/bills
-- [ ] API: POST /api/suppliers/{id}/bills
-- [ ] API: PATCH /api/suppliers/{id}/bills/{bid}/pay
-- [ ] API: POST /api/suppliers/{id}/bills/{bid}/upload
-
-### วัน 4: Finance ครบ
-
-- [ ] DocNumberService → Auto-generate QU-2026-0001
-- [ ] คำนวณ Due Date จาก Credit Term
-- [ ] API: GET /api/finance/documents
-- [ ] API: GET /api/finance/documents/{id}
-- [ ] API: POST /api/finance/documents (QU/PI/DP)
-- [ ] API: PUT /api/finance/documents/{id}
-- [ ] API: PATCH /api/finance/documents/{id}/status
-- [ ] API: GET /api/finance/payments
-- [ ] API: POST /api/finance/payments
-- [ ] API: PATCH /api/finance/payments/{id}/verify
-- [ ] API: POST /api/finance/payments/{id}/upload-slip
-
-### ✅ Phase 2 Deliverables
-
+### ⏳ Phase 2 Deliverables
 ```
-□ CRUD Supplier ครบ → Quote + Sample + Bill
-□ Finance Documents ครบ → สร้าง QU/PI/DP ได้
-□ Auto-generate เลขเอกสาร → QU-2026-0001...
-□ Payment Recording → บันทึก + อัปโหลดสลิป
-□ Supplier Bills (AP) → จ่ายเงินโรงงาน
-□ Push code → branch: backend
-□ สร้าง Pull Request → main
-```
-
-### 📸 หลักฐานรายงาน Phase 2:
-
-```
-□ Screenshot: สร้าง Supplier + ส่ง Quote Request
-□ Screenshot: สร้างเอกสาร QU → เลขเอกสาร Auto
-□ Screenshot: บันทึก Payment + แนบสลิป
-□ Git: Commit history ของ Phase 2
+- [ ] ระบบจัดการจัดซื้อ ขอราคา และบิลชำระเงินโรงงานจีน (17 endpoints)
+- [ ] ระบบตัวอย่างสินค้าลูกค้าและ Artwork (11 endpoints)
+- [ ] ระบบจัดการเงินสดรับ-ออกเอกสารทางการเงิน QU/PI/DP/CI (10 endpoints)
+- [ ] ระบบติดตามขนส่ง Logistics + คลังสินค้า + จัดส่ง (15 endpoints)
 ```
 
 ---
 
-## 🔵 Phase 3: Production Flow (75%)
-> **วัน 5-6 (8-9 ก.ค. 2026)**  
-> **เป้าหมาย:** Client Samples + Artwork + Container + Inventory + Delivery
+## 🟡 Phase 3: Dashboard, Reports & Frontend Integration (75%)
+> **วัน 8-10 (8-10 ก.ค. 2026)**
+> **สถานะ:** รอดำเนินการ ⏳ (0%)
+> **เป้าหมาย:** สรุปหน้าแดชบอร์ด รายงาน และเตรียม API ให้ Frontend เรียกใช้ได้สมบูรณ์
 
-### วัน 5: Client Samples + Artwork
+- [ ] Dashboard APIs (summary, activities, revenue-chart)
+- [ ] Reports APIs (financial-summary, operational-summary, revenue-by-month, profit-by-project)
+- [ ] ปรับปรุง Error Handling + Form Request Validation
+- [ ] Seed Data + Frontend Integration Support
 
-- [ ] API: GET /api/samples
-- [ ] API: GET /api/samples/project/{pid}
-- [ ] API: POST /api/samples
-- [ ] API: PUT /api/samples/{id}
-- [ ] API: PATCH /api/samples/{id}/status
-- [ ] API: GET /api/artworks
-- [ ] API: GET /api/artworks/project/{pid}
-- [ ] API: POST /api/artworks
-- [ ] API: PUT /api/artworks/{id}
-- [ ] API: PATCH /api/artworks/{id}/status
-- [ ] API: PATCH /api/artworks/{id}/feedback
-
-### วัน 6: Logistics ครบ
-
-- [ ] API: GET /api/containers
-- [ ] API: GET /api/containers/{id}
-- [ ] API: POST /api/containers
-- [ ] API: PUT /api/containers/{id}
-- [ ] API: PATCH /api/containers/{id}/step
-- [ ] API: GET /api/inventory/warehouses
-- [ ] API: GET /api/inventory/warehouses/{id}/stocks
-- [ ] API: POST /api/inventory/receive
-- [ ] API: GET /api/inventory/movements
-- [ ] API: GET /api/inventory/low-stock
-- [ ] API: GET /api/delivery/rounds
-- [ ] API: GET /api/delivery/rounds/{id}
-- [ ] API: POST /api/delivery/rounds
-- [ ] API: PATCH /api/delivery/rounds/{id}/confirm ← ⚠️ ตัดสต็อก!
-- [ ] API: PATCH /api/delivery/rounds/{id}/complete
-
-### ✅ Phase 3 Deliverables
-
+### ⏳ Phase 3 Deliverables
 ```
-□ Client Sample Tracking → ส่ง/ติดตาม/Approve/Reject
-□ Artwork Tracking → Upload/Review/Feedback/Approve
-□ Container Tracking → 3 ขั้นตอน (โรงงาน→เรือ→คลัง)
-□ Inventory → รับเข้าคลัง + ดูสต็อก
-□ Delivery → สร้างรอบส่ง + ตัดสต็อก (Transaction!)
-□ Push code → branch: backend
-□ สร้าง Pull Request → main
-```
-
-### 📸 หลักฐานรายงาน Phase 3:
-
-```
-□ Screenshot: สร้าง Sample → เปลี่ยน Status
-□ Screenshot: Container Tracking 3 Steps
-□ Screenshot: ตัดสต็อก → สต็อกลดลงจริง
-□ Git: Commit history ของ Phase 3
+- [ ] Dashboard 3 + Reports 4 = 7 endpoints ใหม่
+- [ ] API ทั้งหมด 81 endpoints พร้อมให้ Frontend เรียกใช้
 ```
 
 ---
 
-## 🟢 Phase 4: Complete + Deploy (100%)
-> **วัน 7-8 (10-11 ก.ค. 2026)**  
-> **เป้าหมาย:** Dashboard + Reports + Testing + Deploy Production
+## 🟡 Phase 4: Production Deploy & OWASP Security Testing (100%)
+> **วัน 11-14 (11-14 ก.ค. 2026)**
+> **สถานะ:** รอดำเนินการ ⏳ (0%)
+> **เป้าหมาย:** Deploy ระบบสู่เซิร์ฟเวอร์จริง ทดสอบความถูกต้อง และทดสอบความปลอดภัยตาม OWASP Top 10:2025
 
-### วัน 7: Dashboard + Reports
+- [ ] Deploy Staging + Production (Hostatom)
+- [ ] Automated Testing (Laravel Feature Tests + Newman Postman)
+- [ ] OWASP Top 10:2025 Security Testing (A01-A10)
+- [ ] Fix Security Issues + Release v1.1.0
 
-- [ ] API: GET /api/dashboard/summary
-- [ ] API: GET /api/dashboard/activities
-- [ ] API: GET /api/dashboard/revenue-chart
-- [ ] API: GET /api/reports/financial-summary
-- [ ] API: GET /api/reports/operational-summary
-- [ ] API: GET /api/reports/revenue-by-month
-- [ ] API: GET /api/reports/profit-by-project
-- [ ] ตรวจ CORS ทำงานกับ Flutter Web
-- [ ] ตรวจ Pagination ทุก List API
-- [ ] ตรวจ Search ทุก List API
-- [ ] ตรวจ Activity Log ครบทุกโมดูล
-
-### วัน 8: Testing + Deploy
-
-- [ ] ทดสอบ Happy Path ครบทุกโมดูล
-- [ ] ทดสอบ Error Cases (Validation, 404, etc.)
-- [ ] ทดสอบ Stock Transaction (ตัดสต็อกซ้ำ?)
-- [ ] ทดสอบ Doc Number ซ้ำ?
-- [ ] Deploy Laravel → Hostatom Production
-- [ ] ตั้งค่า .env Production
-- [ ] ทดสอบ API Production URL
-- [ ] Flutter Web เชื่อมต่อ API Production ได้
-- [ ] สร้าง Production Seeder (Super Admin)
-- [ ] Smoke Test ทั้งระบบ
-
-### ✅ Phase 4 Deliverables (ส่งมอบสุดท้าย)
-
+### ⏳ Phase 4 Deliverables
 ```
-□ Dashboard → แสดง KPIs + กิจกรรมล่าสุด
-□ Reports → สรุปการเงิน + ปฏิบัติการ
-□ ทดสอบครบทุก API → ไม่มี Bug
-□ Deploy Production สำเร็จ
-□ Flutter Web เชื่อมต่อ Production API ได้
-□ Merge ทุก Branch → main
-□ Tag version: v1.0.0
-```
-
-### 📸 หลักฐานรายงาน Phase 4:
-
-```
-□ Screenshot: Dashboard แสดงข้อมูลจริง
-□ Screenshot: Flutter Web ทำงานกับ Production API
-□ URL: Production API ที่ใช้งานได้จริง
-□ Git: Tag v1.0.0
+- [ ] ผลทดสอบ Automated Tests ผ่าน 100%
+- [ ] ระบบทำงานจริงบนเซิร์ฟเวอร์ Hostatom
+- [ ] รายงานผลทดสอบความปลอดภัย OWASP Top 10:2025
+- [ ] Release Tag v1.1.0
 ```
 
 ---
@@ -254,31 +108,22 @@
 ## 📊 สรุป Progress Overview
 
 ```
-Phase 1 (25%):  ████████░░░░░░░░░░░░░░░░░░░░░░░░  Foundation + Core
-Phase 2 (50%):  ░░░░░░░░████████░░░░░░░░░░░░░░░░  Supply Chain
-Phase 3 (75%):  ░░░░░░░░░░░░░░░░████████░░░░░░░░  Production Flow
-Phase 4 (100%): ░░░░░░░░░░░░░░░░░░░░░░░░████████  Complete + Deploy
+Phase 1 (25%):  ████████████████████████████████  Core ERP Foundation & CRM (เสร็จสมบูรณ์ ✅)
+Phase 2 (50%):  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Supply Chain, Finance & Logistics (รอดำเนินการ ⏳)
+Phase 3 (75%):  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Dashboard, Reports & Integration (รอดำเนินการ ⏳)
+Phase 4 (100%): ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Deploy & OWASP Security Testing (รอดำเนินการ ⏳)
 ```
+
+**ความคืบหน้ารวมทั้งหมด ณ ปัจจุบัน (Current Overall Progress): 25%**
 
 | Phase | Status | วันที่เริ่ม | วันที่เสร็จ | Approved by |
 |-------|--------|-----------|-----------|-------------|
-| Phase 1 (25%) | ⬜ ยังไม่เริ่ม | - | - | - |
-| Phase 2 (50%) | ⬜ ยังไม่เริ่ม | - | - | - |
-| Phase 3 (75%) | ⬜ ยังไม่เริ่ม | - | - | - |
-| Phase 4 (100%) | ⬜ ยังไม่เริ่ม | - | - | - |
-
-### วิธีอัปเดต:
-
-```
-เมื่อจบแต่ละ Phase:
-1. ติ๊ก ✅ ทุก Checkbox ในไฟล์นี้
-2. กรอกวันที่ + ผู้ Approve ในตารางด้านบน
-3. เก็บ Screenshot ไว้เป็นหลักฐาน
-4. Commit + Push → สร้าง PR เข้า main
-5. แจ้งหัวหน้า/ลูกค้า พร้อม Progress %
-```
+| **Phase 1 (25.0%)** | ✅ เสร็จสมบูรณ์ | 1 ก.ค. 2026 | 3 ก.ค. 2026 | Super Admin |
+| **Phase 2 (50.0%)** | ⏳ รอดำเนินการ | 4 ก.ค. 2026 | 7 ก.ค. 2026 | - |
+| **Phase 3 (75.0%)** | ⏳ รอดำเนินการ | 8 ก.ค. 2026 | 10 ก.ค. 2026 | - |
+| **Phase 4 (100.0%)**| ⏳ รอดำเนินการ | 11 ก.ค. 2026 | 14 ก.ค. 2026 | - |
 
 ---
 
-> 📝 **สร้างโดย:** Antigravity AI Assistant  
-> **วันที่:** 4 กรกฎาคม 2026
+> 📝 **สร้างโดย:** ทีมพัฒนา PPN GREAT Backend
+> **วันที่อัปเดตล่าสุด:** 3 กรกฎาคม 2026
