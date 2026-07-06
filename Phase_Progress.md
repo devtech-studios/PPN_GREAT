@@ -12,7 +12,7 @@
 | Phase | ช่วง | วัน | ความคืบหน้า | สิ่งที่ส่งมอบ |
 |-------|------|-----|-----------|-------------|
 | **Phase 1** | Core ERP Foundation & CRM | วัน 1-3 (1-3 ก.ค. 2026) | **เสร็จสมบูรณ์** ✅ (100%) | Setup + JWT Auth + CRUD ลูกค้า + CRUD โปรเจกต์ |
-| **Phase 2** | Supply Chain, Finance & Logistics | วัน 4-7 (4-7 ก.ค. 2026) | **รอดำเนินการ** ⏳ (0%) | Supplier + ขอราคา + บิลจ่ายเงิน + เอกสารการเงิน + ตู้สินค้า + คลัง/จัดส่ง |
+| **Phase 2** | Supply Chain, Finance & Logistics | วัน 4-7 (4-7 ก.ค. 2026) | **เสร็จสมบูรณ์** ✅ (100%) | Supplier + ขอราคา + บิลจ่ายเงิน + เอกสารการเงิน + ตู้สินค้า + คลัง/จัดส่ง |
 | **Phase 3** | Dashboard, Reports & Frontend Integration | วัน 8-10 (8-10 ก.ค. 2026) | **รอดำเนินการ** ⏳ (0%) | Dashboard + Reports + เชื่อม API กับ Flutter + Polish |
 | **Phase 4** | Production Deploy & OWASP Security Testing | วัน 11-14 (11-14 ก.ค. 2026) | **รอดำเนินการ** ⏳ (0%) | Deploy เซิร์ฟเวอร์จริง + ทดสอบความถูกต้อง + ทดสอบความปลอดภัย OWASP Top 10:2025 |
 
@@ -41,28 +41,29 @@
 
 ---
 
-## 🟡 Phase 2: Supply Chain, Finance & Logistics (50%)
+## 🟢 Phase 2: Supply Chain, Finance & Logistics (50%)
 > **วัน 4-7 (4-7 ก.ค. 2026)**
-> **สถานะ:** รอดำเนินการ ⏳ (0%)
+> **สถานะ:** เสร็จสมบูรณ์ ✅ (100%)
 > **เป้าหมาย:** ระบบจัดซื้อ (Supplier), ออกเอกสารการเงินเรียกเก็บเงิน/จ่ายเงิน, ระบบติดตามตู้สินค้า และจัดการคลังสินค้า/จัดส่งตัดสต็อก
 
-- [ ] พัฒนา CRUD APIs สำหรับ Supplier และระบบขอราคา (Quote Requests)
-- [ ] พัฒนาระบบแชร์ลิงก์ให้ Supplier กรอกราคาด้วยตนเอง (Public Guest Quote Price Input)
-- [ ] พัฒนาระบบขอตัวอย่างสินค้าจากโรงงานจีน (Supplier Samples) และจัดการบิลค่าใช้จ่าย/แนบเอกสาร (Supplier Bills - AP)
-- [ ] พัฒนา Client Samples (ส่งตัวอย่างให้ลูกค้า + Multi-attempt + Dual Tracking)
-- [ ] พัฒนาระบบ Artwork Tracking (Version Management + File Upload)
-- [ ] พัฒนาตัวช่วยสร้างเอกสารการเงินอัตโนมัติ (DocNumberService: QU, PI, DP, CI) คำนวณวันครบกำหนดตาม Term
-- [ ] พัฒนาระบบบันทึกรับเงินลูกค้า (Payments - AR) พร้อมช่องทางอัปโหลดสลิปเงินโอน
-- [ ] พัฒนาระบบติดตามตู้สินค้า (Containers) เชื่อมหลายโปรเจกต์
-- [ ] พัฒนาระบบคลังสินค้า (Inventory) และประวัติการเคลื่อนไหวสต็อก
-- [ ] พัฒนาระบบจัดรอบส่งมอบสินค้า (Dispatch Round) และตัดสต็อกด้วย Atomic Transaction
+- [x] พัฒนา CRUD APIs สำหรับ Supplier และระบบขอราคา (Quote Requests)
+- [x] พัฒนาระบบแชร์ลิงก์ให้ Supplier กรอกราคาด้วยตนเอง (Public Guest Quote Price Input)
+- [x] พัฒนาระบบขอตัวอย่างสินค้าจากโรงงานจีน (Supplier Samples) และจัดการบิลค่าใช้จ่าย/แนบเอกสาร (Supplier Bills - AP)
+- [x] พัฒนา Client Samples (ส่งตัวอย่างให้ลูกค้า + Multi-attempt + Dual Tracking)
+- [x] พัฒนาระบบ Artwork Tracking (Version Management + File Upload)
+- [x] พัฒนาตัวช่วยสร้างเอกสารการเงินอัตโนมัติ (DocNumberService: QU, PI, DP, CI) คำนวณวันครบกำหนดตาม Term
+- [x] พัฒนาระบบบันทึกรับเงินลูกค้า (Payments - AR) พร้อมช่องทางอัปโหลดสลิปเงินโอนและการตรวจสอบความถูกต้อง
+- [x] พัฒนาระบบติดตามตู้สินค้า (Containers) เชื่อมหลายโปรเจกต์ พร้อมขั้นตอนสถานะ 3 ขั้น (โรงงาน -> เรือ -> คลัง)
+- [x] พัฒนาระบบคลังสินค้า (Inventory Warehouses) ตรวจสอบสต็อกคงเหลือแยกรายคลัง และประวัติการเคลื่อนไหวสต็อก
+- [x] พัฒนาระบบจัดรอบการส่งมอบสินค้า (Dispatch Round) และการตัดสต็อกสินค้าในคลังสินค้าด้วยความปลอดภัย (Database Transaction)
 
-### ⏳ Phase 2 Deliverables
+### ✅ Phase 2 Deliverables (ส่งมอบแล้ว)
 ```
-- [ ] ระบบจัดการจัดซื้อ ขอราคา และบิลชำระเงินโรงงานจีน (17 endpoints)
-- [ ] ระบบตัวอย่างสินค้าลูกค้าและ Artwork (11 endpoints)
-- [ ] ระบบจัดการเงินสดรับ-ออกเอกสารทางการเงิน QU/PI/DP/CI (10 endpoints)
-- [ ] ระบบติดตามขนส่ง Logistics + คลังสินค้า + จัดส่ง (15 endpoints)
+- [x] ระบบจัดการจัดซื้อ ขอราคา และบิลชำระเงินโรงงานจีน — 17 endpoints
+- [x] ระบบตัวอย่างสินค้าลูกค้าและ Artwork — 11 endpoints
+- [x] ระบบจัดการเงินสดรับ-ออกเอกสารทางการเงิน QU/PI/DP/CI — 10 endpoints
+- [x] ระบบติดตามขนส่ง Logistics + คลังสินค้า + จัดส่ง — 15 endpoints
+- [x] ผ่านการทดสอบ Automated Newman (46 Requests Passed) และ Feature Tests (24 Passed)
 ```
 
 ---
@@ -109,21 +110,21 @@
 
 ```
 Phase 1 (25%):  ████████████████████████████████  Core ERP Foundation & CRM (เสร็จสมบูรณ์ ✅)
-Phase 2 (50%):  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Supply Chain, Finance & Logistics (รอดำเนินการ ⏳)
+Phase 2 (50%):  ████████████████████████████████  Supply Chain, Finance & Logistics (เสร็จสมบูรณ์ ✅)
 Phase 3 (75%):  ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Dashboard, Reports & Integration (รอดำเนินการ ⏳)
 Phase 4 (100%): ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  Deploy & OWASP Security Testing (รอดำเนินการ ⏳)
 ```
 
-**ความคืบหน้ารวมทั้งหมด ณ ปัจจุบัน (Current Overall Progress): 25%**
+**ความคืบหน้ารวมทั้งหมด ณ ปัจจุบัน (Current Overall Progress): 50%**
 
 | Phase | Status | วันที่เริ่ม | วันที่เสร็จ | Approved by |
 |-------|--------|-----------|-----------|-------------|
 | **Phase 1 (25.0%)** | ✅ เสร็จสมบูรณ์ | 1 ก.ค. 2026 | 3 ก.ค. 2026 | Super Admin |
-| **Phase 2 (50.0%)** | ⏳ รอดำเนินการ | 4 ก.ค. 2026 | 7 ก.ค. 2026 | - |
+| **Phase 2 (50.0%)** | ✅ เสร็จสมบูรณ์ | 4 ก.ค. 2026 | 7 ก.ค. 2026 | Super Admin |
 | **Phase 3 (75.0%)** | ⏳ รอดำเนินการ | 8 ก.ค. 2026 | 10 ก.ค. 2026 | - |
 | **Phase 4 (100.0%)**| ⏳ รอดำเนินการ | 11 ก.ค. 2026 | 14 ก.ค. 2026 | - |
 
 ---
 
 > 📝 **สร้างโดย:** ทีมพัฒนา PPN GREAT Backend
-> **วันที่อัปเดตล่าสุด:** 3 กรกฎาคม 2026
+> **วันที่อัปเดตล่าสุด:** 7 กรกฎาคม 2026
