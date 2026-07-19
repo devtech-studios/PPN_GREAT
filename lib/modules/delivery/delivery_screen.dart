@@ -1,5 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:ppn_great/core/api/api_client.dart';
+import 'package:ppn_great/core/api/api_endpoints.dart';
 
 class MouseDraggableScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -7,6 +9,14 @@ class MouseDraggableScrollBehavior extends MaterialScrollBehavior {
     PointerDeviceKind.touch,
     PointerDeviceKind.mouse,
   };
+}
+
+int _parseInt(dynamic val) {
+  if (val == null) return 0;
+  if (val is int) return val;
+  if (val is double) return val.toInt();
+  if (val is String) return int.tryParse(val) ?? 0;
+  return int.tryParse(val.toString()) ?? 0;
 }
 
 class DeliveryScreen extends StatefulWidget {
@@ -17,110 +27,117 @@ class DeliveryScreen extends StatefulWidget {
 }
 
 class _DeliveryScreenState extends State<DeliveryScreen> {
+  final ApiClient _api = ApiClient();
   String _searchText = "";
-  String _selectedOrderId = "DO-001";
+  int? _selectedProjectId;
+  List<dynamic> _projects = [];
+  List<dynamic> _rounds = [];
+  List<dynamic> _warehouses = [];
+  List<dynamic> _allStocks = [];
+  bool _isLoading = true;
 
   // ฟอร์มจัดส่งแบบหลายรายการ (Multi-product Dispatch)
   String _deliveryAddress = "";
-  String _dispatchDate = "26 May 2026";
+  String _dispatchDate = "";
+  String _driverName = "";
+  String _vehiclePlate = "";
+  String _notes = "";
   List<Map<String, dynamic>> _dispatchItems = [];
 
-  // ==========================================
-  // Mock Data
-  // ==========================================
-  final List<Map<String, dynamic>> _deliveryOrders = [
-    {
-      "id": "DO-001",
-      "project_id": "PRJ-009",
-      "customer": "Central Group",
-      "status": "Ready to Ship",
-      "address": "คลังสินค้า Central บางนา 123 หมู่ 4 สมุทรปราการ",
-      "products": <Map<String, dynamic>>[
-        {
-          "name": "ร่มกอล์ฟ 30 นิ้ว พิมพ์ลายรอบคัน",
-          "total_qty": 1500,
-          "delivered_qty": 500,
-          "defect_qty": 0,
-        },
-        {
-          "name": "กระบอกน้ำสแตนเลส เลเซอร์โลโก้",
-          "total_qty": 2000,
-          "delivered_qty": 2000,
-          "defect_qty": 10,
-        },
-        {
-          "name": "ถุงผ้าสปันบอนด์ 75 แกรม หูหิ้ว",
-          "total_qty": 3000,
-          "delivered_qty": 0,
-          "defect_qty": 0,
-        },
-      ],
-      "history": <Map<String, dynamic>>[
-        {
-          "batch": "Round 1",
-          "date": "15 May 2026",
-          "items": [
-            {
-              "product": "ร่มกอล์ฟ 30 นิ้ว พิมพ์ลายรอบคัน",
-              "qty": 500,
-              "defect": 0,
-            },
-            {
-              "product": "กระบอกน้ำสแตนเลส เลเซอร์โลโก้",
-              "qty": 2000,
-              "defect": 10,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      "id": "DO-002",
-      "project_id": "PRJ-001",
-      "customer": "Lion (Thailand)",
-      "status": "Customs clearing",
-      "address": "666 ถ.พระราม 3 แขวงบางคอแหลม เขตยานนาวา กทม",
-      "products": <Map<String, dynamic>>[
-        {
-          "name": "กระเป๋าผ้าคอตตอน 12 ออนซ์",
-          "total_qty": 20000,
-          "delivered_qty": 0,
-          "defect_qty": 0,
-        },
-      ],
-      "history": <Map<String, dynamic>>[],
-    },
-  ];
+  List<dynamic> _getFilteredProjects() {
+    if (_searchText.isEmpty) return _projects;
+    return _projects.where((p) {
+      final code = (p['project_code'] ?? '').toString().toLowerCase();
+      final customer = (p['customer']?['name'] ?? '').toString().toLowerCase();
+      return code.contains(_searchText.toLowerCase()) ||
+          customer.contains(_searchText.toLowerCase());
+    }).toList();
+  }
 
-  List<Map<String, dynamic>> _getFilteredOrders() {
-    if (_searchText.isEmpty) return _deliveryOrders;
-    return _deliveryOrders
-        .where(
-          (o) =>
-              o['customer'].toString().toLowerCase().contains(
-                _searchText.toLowerCase(),
-              ) ||
-              o['project_id'].toString().toLowerCase().contains(
-                _searchText.toLowerCase(),
-              ),
-        )
-        .toList();
+  int _getWarehouseStock(int? productItemId, int? warehouseId) {
+    if (productItemId == null || warehouseId == null) return 0;
+    for (var s in _allStocks) {
+      if (s['product_item_id'] == productItemId &&
+          s['warehouse_id'] == warehouseId) {
+        return s['qty_in_stock'] ?? 0;
+      }
+    }
+    return 0;
   }
 
   @override
   void initState() {
     super.initState();
+    _dispatchDate = DateTime.now().toLocal().toString().split(' ').first;
     _initDispatchForm();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    setState(() => _isLoading = true);
+    try {
+      final pResponse = await _api.get(ProjectEndpoints.index);
+      final rResponse = await _api.get(DeliveryEndpoints.index);
+      final wResponse = await _api.get(InventoryEndpoints.warehouses);
+
+      List<dynamic> allStocks = [];
+      final warehousesList = wResponse.data['data'] ?? [];
+      for (var w in warehousesList) {
+        try {
+          final stocksRes = await _api.get(
+            InventoryEndpoints.warehouseStocks(_parseInt(w['id'])),
+          );
+          if (stocksRes.statusCode == 200) {
+            final List data = stocksRes.data['data'] ?? [];
+            allStocks.addAll(data);
+          }
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        setState(() {
+          _projects = pResponse.data['data'] ?? [];
+          _rounds = rResponse.data['data'] ?? [];
+          _warehouses = warehousesList;
+          _allStocks = allStocks;
+
+          // Auto-select first project if none selected
+          if (_selectedProjectId == null && _projects.isNotEmpty) {
+            _selectedProjectId = _parseInt(_projects[0]['id']);
+            final cust = _projects[0]['customer'];
+            _deliveryAddress =
+                cust?['billing_address'] ?? cust?['billing_address'] ?? '';
+          }
+
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error fetching data: $e"),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
   }
 
   void _initDispatchForm() {
     _dispatchItems = [
-      {"product_name": null, "qty": 0, "defect": 0, "error": null},
+      {"product_item_id": null, "qty": 0, "warehouse_id": null, "error": null},
     ];
+    _driverName = "";
+    _vehiclePlate = "";
+    _notes = "";
   }
 
-  void _loadOrderData(Map<String, dynamic> order) {
-    _deliveryAddress = order['address'];
+  void _loadProjectData(Map<String, dynamic> proj) {
+    final cust = proj['customer'];
+    _deliveryAddress =
+        cust?['billing_address'] ?? cust?['billing_address'] ?? '';
     _initDispatchForm();
   }
 
@@ -131,9 +148,9 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
       int rem = p['total_qty'] - p['delivered_qty'];
       if (rem > 0) {
         newItems.add({
-          "product_name": p['name'],
+          "product_item_id": p['id'],
           "qty": rem,
-          "defect": 0,
+          "warehouse_id": _warehouses.isNotEmpty ? _warehouses[0]['id'] : null,
           "error": null,
         });
       }
@@ -159,41 +176,191 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     }
   }
 
+  Future<void> _confirmRound(int roundId) async {
+    try {
+      final response = await _api.patch(DeliveryEndpoints.confirm(roundId));
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✓ ยืนยันปล่อยรถ (In Transit) และหักสต็อกสำเร็จ!"),
+            backgroundColor: Color(0xFF4A9062),
+          ),
+        );
+        _fetchData();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response.data['message'] ?? "เกิดข้อผิดพลาด"),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: $e"),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
+      );
+    }
+  }
+
+  Future<void> _completeRound(int roundId) async {
+    try {
+      final response = await _api.patch(DeliveryEndpoints.complete(roundId));
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✓ ยืนยันส่งมอบสินค้าเสร็จสมบูรณ์เรียบร้อย!"),
+            backgroundColor: Color(0xFF4A9062),
+          ),
+        );
+        _fetchData();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response.data['message'] ?? "เกิดข้อผิดพลาด"),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: $e"),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveRound() async {
+    // Collect and format request payload
+    final List<Map<String, dynamic>> itemsPayload = [];
+    for (var item in _dispatchItems) {
+      itemsPayload.add({
+        "project_id": _selectedProjectId,
+        "product_item_id": item['product_item_id'],
+        "qty_to_deliver": item['qty'],
+        "delivery_address": _deliveryAddress,
+        "warehouse_id": item['warehouse_id'],
+        "notes": _notes.isNotEmpty ? _notes : null,
+      });
+    }
+
+    final payload = {
+      "dispatch_date": _dispatchDate,
+      "driver_name": _driverName.isNotEmpty ? _driverName : null,
+      "vehicle_plate": _vehiclePlate.isNotEmpty ? _vehiclePlate : null,
+      "notes": _notes.isNotEmpty ? _notes : null,
+      "items": itemsPayload,
+    };
+
+    try {
+      final response = await _api.post(DeliveryEndpoints.store, data: payload);
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("✓ บันทึกรอบจัดส่งใหม่เรียบร้อยแล้ว"),
+            backgroundColor: Color(0xFF4A9062),
+          ),
+        );
+        _initDispatchForm();
+        _fetchData();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response.data['message'] ?? "เกิดข้อผิดพลาด"),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: $e"),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final filteredOrders = _getFilteredOrders();
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
-    Map<String, dynamic> selectedOrder;
-    if (filteredOrders.isEmpty) {
-      selectedOrder = _deliveryOrders[0];
+    final filteredProjects = _getFilteredProjects();
+
+    Map<String, dynamic> selectedProject;
+    if (filteredProjects.isEmpty) {
+      return const Scaffold(
+        body: Center(child: Text("ไม่มีข้อมูลโปรเจกต์ในการจัดส่ง")),
+      );
     } else {
-      selectedOrder = filteredOrders.firstWhere(
-        (o) => o['id'] == _selectedOrderId,
-        orElse: () => filteredOrders[0],
+      selectedProject = filteredProjects.firstWhere(
+        (p) => p['id'] == _selectedProjectId,
+        orElse: () => filteredProjects[0],
       );
     }
 
     if (_deliveryAddress.isEmpty) {
-      _deliveryAddress = selectedOrder['address'];
+      final cust = selectedProject['customer'];
+      _deliveryAddress =
+          cust?['billing_address'] ?? cust?['billing_address'] ?? '';
     }
 
-    List<Map<String, dynamic>> products = List<Map<String, dynamic>>.from(
-      selectedOrder['products'],
-    );
-    int nextRound = (selectedOrder['history'] as List).length + 1;
+    // Compute products list for Delivery Overview
+    final List<Map<String, dynamic>> products = [];
+    final List rawItems = selectedProject['product_items'] ?? [];
+    for (var item in rawItems) {
+      final int itemId = _parseInt(item['id']);
+      final String itemName = item['name'] ?? 'ไม่มีชื่อสินค้า';
+      final int totalQty = item['qty'] ?? 0;
 
-    // เลือกสีของสถานะออเดอร์
+      // Calculate delivered qty from _rounds
+      int deliveredQty = 0;
+      for (var r in _rounds) {
+        final List rItems = r['items'] ?? [];
+        for (var ri in rItems) {
+          if (ri['product_item_id'] == itemId &&
+              (r['status'] == 'Delivered' || r['status'] == 'In Transit')) {
+            deliveredQty += _parseInt(ri['qty_to_deliver']);
+          }
+        }
+      }
+
+      products.add({
+        "id": itemId,
+        "name": itemName,
+        "total_qty": totalQty,
+        "delivered_qty": deliveredQty,
+        "defect_qty": 0,
+      });
+    }
+
+    int projectRoundsCount = 0;
+    for (var r in _rounds) {
+      final List rItems = r['items'] ?? [];
+      final bool hasProjectItem = rItems.any(
+        (ri) => ri['project_id'] == selectedProject['id'],
+      );
+      if (hasProjectItem) {
+        projectRoundsCount++;
+      }
+    }
+    int nextRound = projectRoundsCount + 1;
+
     Color orderStatusColor = const Color(0xFF86868B);
     Color orderStatusBg = const Color(0xFFF4F5F7);
-    if (selectedOrder['status'] == 'Ready to Ship') {
+    final String projStatus = selectedProject['status'] ?? 'Inquiry';
+    if (projStatus == 'Production') {
       orderStatusColor = const Color(0xFFD08A2A);
       orderStatusBg = const Color(0xFFFDF3E1);
-    } else if (selectedOrder['status'] == 'Delivered') {
+    } else if (projStatus == 'Delivered') {
       orderStatusColor = const Color(0xFF4A9062);
       orderStatusBg = const Color(0xFFB7E4C7).withOpacity(0.3);
-    } else if (selectedOrder['status'] == 'Customs clearing') {
-      orderStatusColor = const Color(0xFF5B7BD5);
-      orderStatusBg = const Color(0xFFAEC4FA).withOpacity(0.3);
     }
 
     return Scaffold(
@@ -290,28 +457,26 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                 Expanded(
                   child: ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: filteredOrders.length,
+                    itemCount: filteredProjects.length,
                     itemBuilder: (context, index) {
-                      final order = filteredOrders[index];
-                      final isSelected = _selectedOrderId == order['id'];
+                      final project = filteredProjects[index];
+                      final isSelected = _selectedProjectId == project['id'];
 
                       Color statusColor = const Color(0xFF86868B);
                       Color statusBg = const Color(0xFFF4F5F7);
-                      if (order['status'] == 'Ready to Ship') {
+                      final String status = project['status'] ?? 'Inquiry';
+                      if (status == 'Production') {
                         statusColor = const Color(0xFFD08A2A);
                         statusBg = const Color(0xFFFDF3E1);
-                      } else if (order['status'] == 'Delivered') {
+                      } else if (status == 'Delivered') {
                         statusColor = const Color(0xFF4A9062);
                         statusBg = const Color(0xFFB7E4C7).withOpacity(0.3);
-                      } else if (order['status'] == 'Customs clearing') {
-                        statusColor = const Color(0xFF5B7BD5);
-                        statusBg = const Color(0xFFAEC4FA).withOpacity(0.3);
                       }
 
                       return InkWell(
                         onTap: () => setState(() {
-                          _selectedOrderId = order['id'];
-                          _loadOrderData(order);
+                          _selectedProjectId = project['id'];
+                          _loadProjectData(project);
                         }),
                         borderRadius: BorderRadius.circular(16),
                         child: Container(
@@ -336,7 +501,8 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    order['project_id'],
+                                    project['project_code'] ??
+                                        'PRJ-${project['id']}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
@@ -355,7 +521,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
-                                      order['status'],
+                                      status,
                                       style: TextStyle(
                                         fontSize: 10,
                                         fontWeight: FontWeight.bold,
@@ -367,7 +533,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                order['customer'],
+                                project['customer']?['name'] ?? 'ลูกค้าทั่วไป',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 14,
@@ -378,7 +544,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                "Total Items: ${(order['products'] as List).length}",
+                                "Total Items: ${(project['product_items'] as List?)?.length ?? 0}",
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Color(0xFF86868B),
@@ -423,7 +589,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            "Project: ${selectedOrder['project_id']} - ${selectedOrder['customer']}",
+                            "Project: ${selectedProject['project_code'] ?? 'PRJ-${selectedProject['id']}'} - ${selectedProject['customer']?['name'] ?? ''}",
                             style: const TextStyle(
                               fontSize: 15,
                               color: Color(0xFF2563EB),
@@ -447,7 +613,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                         child: Row(
                           children: [
                             Icon(
-                              selectedOrder['status'] == 'Ready to Ship'
+                              projStatus == 'Production'
                                   ? Icons.local_shipping
                                   : Icons.info_outline,
                               size: 16,
@@ -455,7 +621,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              "Status: ${selectedOrder['status']}",
+                              "Status: $projStatus",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 color: orderStatusColor,
@@ -728,16 +894,63 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                             ),
                             const SizedBox(width: 16),
                             Expanded(
-                              flex: 4,
+                              flex: 2,
+                              child: _buildFormField(
+                                "Driver Name",
+                                TextFormField(
+                                  initialValue: _driverName,
+                                  onChanged: (val) => _driverName = val,
+                                  decoration: _inputDeco(
+                                    icon: Icons.person_outline,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              flex: 2,
+                              child: _buildFormField(
+                                "Vehicle Plate",
+                                TextFormField(
+                                  initialValue: _vehiclePlate,
+                                  onChanged: (val) => _vehiclePlate = val,
+                                  decoration: _inputDeco(
+                                    icon: Icons.badge_outlined,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 1,
                               child: _buildFormField(
                                 "Delivery Address",
                                 TextFormField(
+                                  key: Key("addr_$_selectedProjectId"),
                                   initialValue: _deliveryAddress,
                                   maxLines: 2,
                                   onChanged: (val) => _deliveryAddress = val,
                                   decoration: _inputDeco(
                                     icon: Icons.location_on_outlined,
                                   ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              flex: 1,
+                              child: _buildFormField(
+                                "Notes (หมายเหตุเพิ่มเติม)",
+                                TextFormField(
+                                  initialValue: _notes,
+                                  maxLines: 2,
+                                  onChanged: (val) => _notes = val,
+                                  decoration: _inputDeco(icon: Icons.notes),
                                 ),
                               ),
                             ),
@@ -789,9 +1002,9 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                           Map<String, dynamic> item = entry.value;
 
                           int remainingQty = 0;
-                          if (item['product_name'] != null) {
+                          if (item['product_item_id'] != null) {
                             var pData = products.firstWhere(
-                              (p) => p['name'] == item['product_name'],
+                              (p) => p['id'] == item['product_item_id'],
                               orElse: () => {
                                 'total_qty': 0,
                                 'delivered_qty': 0,
@@ -822,7 +1035,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                                   children: [
                                     // 1. Dropdown เลือกสินค้า
                                     Expanded(
-                                      flex: 4,
+                                      flex: 3,
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
@@ -835,42 +1048,37 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                                             ),
                                           ),
                                           const SizedBox(height: 8),
-                                          DropdownButtonFormField<String>(
+                                          DropdownButtonFormField<int>(
                                             isExpanded: true,
-                                            initialValue:
-                                                item['product_name'], // Binding data
-                                            decoration: _inputDeco(),
+                                            value: item['product_item_id'],
+                                            decoration: _inputDeco().copyWith(
+                                              labelText:
+                                                  'Delivery product ${index + 1}',
+                                            ),
                                             hint: const Text(
                                               "เลือกสินค้าที่จะส่ง",
                                             ),
                                             items: products
-                                                .where(
-                                                  (p) =>
-                                                      (p['total_qty'] -
-                                                          p['delivered_qty']) >
-                                                      0,
-                                                )
                                                 .map(
-                                                  (p) =>
-                                                      DropdownMenuItem<String>(
-                                                        value: p['name'],
-                                                        child: Text(
-                                                          p['name'],
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                        ),
-                                                      ),
+                                                  (p) => DropdownMenuItem<int>(
+                                                    value: _parseInt(p['id']),
+                                                    child: Text(
+                                                      p['name'],
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
                                                 )
                                                 .toList(),
                                             onChanged: (val) {
                                               setState(() {
-                                                item['product_name'] = val;
+                                                item['product_item_id'] = val;
                                                 item['qty'] = 0;
                                                 item['error'] = null;
                                               });
                                             },
                                           ),
-                                          if (item['product_name'] != null)
+                                          if (item['product_item_id'] != null)
                                             Padding(
                                               padding: const EdgeInsets.only(
                                                 top: 6,
@@ -888,9 +1096,86 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 16),
-                                    // 2. Qty Input + Quick Fill
+                                    // 2. Dropdown เลือกคลังสินค้า
                                     Expanded(
                                       flex: 3,
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            "Select Warehouse",
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          DropdownButtonFormField<int?>(
+                                            isExpanded: true,
+                                            value: item['warehouse_id'],
+                                            decoration: _inputDeco().copyWith(
+                                              labelText:
+                                                  'Delivery warehouse ${index + 1}',
+                                            ),
+                                            hint: const Text(
+                                              "เลือกคลังเพื่อตัดสต็อก",
+                                            ),
+                                            items: [
+                                              const DropdownMenuItem<int?>(
+                                                value: null,
+                                                child: Text(
+                                                  "ไม่ตัดสต็อก (Direct)",
+                                                  style: TextStyle(
+                                                    color: Color(0xFF64748B),
+                                                  ),
+                                                ),
+                                              ),
+                                              ..._warehouses.map(
+                                                (w) => DropdownMenuItem<int?>(
+                                                  value: _parseInt(w['id']),
+                                                  child: Text(
+                                                    "${w['name']} (${w['location']?.toString().split(' ').first ?? ''})",
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                            onChanged: (val) {
+                                              setState(() {
+                                                item['warehouse_id'] = val;
+                                              });
+                                            },
+                                          ),
+                                          if (item['warehouse_id'] != null)
+                                            Padding(
+                                              padding: const EdgeInsets.only(
+                                                top: 6,
+                                              ),
+                                              child: Text(
+                                                "Stock in warehouse: ${_getWarehouseStock(item['product_item_id'], item['warehouse_id'])} pcs",
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color:
+                                                      _getWarehouseStock(
+                                                            item['product_item_id'],
+                                                            item['warehouse_id'],
+                                                          ) >
+                                                          0
+                                                      ? const Color(0xFF10B981)
+                                                      : const Color(0xFFEF4444),
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    // 3. Qty Input + Quick Fill
+                                    Expanded(
+                                      flex: 2,
                                       child: Column(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
@@ -910,13 +1195,17 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                                             initialValue: item['qty']
                                                 .toString(),
                                             keyboardType: TextInputType.number,
-                                            decoration: _inputDeco(
-                                              errorText: item['error'],
-                                            ),
+                                            decoration:
+                                                _inputDeco(
+                                                  errorText: item['error'],
+                                                ).copyWith(
+                                                  labelText:
+                                                      'Delivery quantity ${index + 1}',
+                                                ),
                                             onChanged: (val) => item['qty'] =
                                                 int.tryParse(val) ?? 0,
                                           ),
-                                          if (item['product_name'] != null)
+                                          if (item['product_item_id'] != null)
                                             Padding(
                                               padding: const EdgeInsets.only(
                                                 top: 6,
@@ -926,50 +1215,51 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                                                   _buildQuickFillBtn(
                                                     "Half",
                                                     () => setState(() {
+                                                      int maxDeliverable =
+                                                          remainingQty;
+                                                      if (item['warehouse_id'] !=
+                                                          null) {
+                                                        int
+                                                        stock = _getWarehouseStock(
+                                                          item['product_item_id'],
+                                                          item['warehouse_id'],
+                                                        );
+                                                        maxDeliverable =
+                                                            stock < remainingQty
+                                                            ? stock
+                                                            : remainingQty;
+                                                      }
                                                       item['qty'] =
-                                                          remainingQty ~/ 2;
+                                                          maxDeliverable ~/ 2;
                                                       item['error'] = null;
                                                     }),
                                                   ),
-                                                  const SizedBox(width: 8),
+                                                  const SizedBox(width: 4),
                                                   _buildQuickFillBtn(
-                                                    "All Remaining",
+                                                    "All",
                                                     () => setState(() {
-                                                      item['qty'] =
+                                                      int maxDeliverable =
                                                           remainingQty;
+                                                      if (item['warehouse_id'] !=
+                                                          null) {
+                                                        int
+                                                        stock = _getWarehouseStock(
+                                                          item['product_item_id'],
+                                                          item['warehouse_id'],
+                                                        );
+                                                        maxDeliverable =
+                                                            stock < remainingQty
+                                                            ? stock
+                                                            : remainingQty;
+                                                      }
+                                                      item['qty'] =
+                                                          maxDeliverable;
                                                       item['error'] = null;
                                                     }),
                                                   ),
                                                 ],
                                               ),
                                             ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    // 3. Defect Qty
-                                    Expanded(
-                                      flex: 2,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          const Text(
-                                            "Defect Qty",
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 8),
-                                          TextFormField(
-                                            initialValue: item['defect']
-                                                .toString(),
-                                            keyboardType: TextInputType.number,
-                                            decoration: _inputDeco(),
-                                            onChanged: (val) => item['defect'] =
-                                                int.tryParse(val) ?? 0,
-                                          ),
                                         ],
                                       ),
                                     ),
@@ -998,9 +1288,11 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                         OutlinedButton.icon(
                           onPressed: () => setState(
                             () => _dispatchItems.add({
-                              "product_name": null,
+                              "product_item_id": null,
                               "qty": 0,
-                              "defect": 0,
+                              "warehouse_id": _warehouses.isNotEmpty
+                                  ? _warehouses[0]['id']
+                                  : null,
                               "error": null,
                             }),
                           ),
@@ -1027,12 +1319,12 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                               setState(() {
                                 // Validation
                                 for (var item in _dispatchItems) {
-                                  if (item['product_name'] == null) {
+                                  if (item['product_item_id'] == null) {
                                     item['error'] = "Please select product";
                                     hasError = true;
                                   } else {
                                     var pData = products.firstWhere(
-                                      (p) => p['name'] == item['product_name'],
+                                      (p) => p['id'] == item['product_item_id'],
                                     );
                                     int rem =
                                         pData['total_qty'] -
@@ -1053,48 +1345,8 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
 
                               if (hasError) return;
 
-                              // บันทึกข้อมูล
-                              setState(() {
-                                List<Map<String, dynamic>> savedItems = [];
-                                for (var item in _dispatchItems) {
-                                  var prod = (selectedOrder['products'] as List)
-                                      .firstWhere(
-                                        (p) =>
-                                            p['name'] == item['product_name'],
-                                      );
-                                  prod['delivered_qty'] += item['qty'];
-                                  if (item['defect'] > 0) {
-                                    prod['defect_qty'] =
-                                        (prod['defect_qty'] ?? 0) +
-                                        item['defect'];
-                                  }
-
-                                  savedItems.add({
-                                    "product": item['product_name'],
-                                    "qty": item['qty'],
-                                    "defect": item['defect'],
-                                  });
-                                }
-
-                                selectedOrder['address'] = _deliveryAddress;
-
-                                (selectedOrder['history'] as List).add({
-                                  "batch": "Round $nextRound",
-                                  "date": _dispatchDate,
-                                  "items": savedItems,
-                                });
-
-                                _initDispatchForm();
-                              });
-
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    "✓ Delivery recorded successfully!",
-                                  ),
-                                  backgroundColor: Color(0xFF4A9062),
-                                ),
-                              );
+                              // บันทึกข้อมูลไปยัง API
+                              _saveRound();
                             },
                             borderRadius: BorderRadius.circular(12),
                             child: Container(
@@ -1140,100 +1392,308 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.grey.withOpacity(0.15)),
                     ),
-                    child: (selectedOrder['history'] as List).isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(32.0),
-                            child: Center(
-                              child: Text(
-                                "ยังไม่มีประวัติการจัดส่งในระบบ",
-                                style: TextStyle(color: Color(0xFF86868B)),
-                              ),
+                    child: () {
+                      final projectRounds = _rounds.where((r) {
+                        final List items = r['items'] ?? [];
+                        return items.any(
+                          (item) => item['project_id'] == selectedProject['id'],
+                        );
+                      }).toList();
+
+                      if (projectRounds.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.all(32.0),
+                          child: Center(
+                            child: Text(
+                              "ยังไม่มีประวัติการจัดส่งในระบบ",
+                              style: TextStyle(color: Color(0xFF86868B)),
                             ),
-                          )
-                        : DataTable(
-                            headingRowColor: WidgetStateProperty.all(
-                              const Color(0xFFF7F9FC),
+                          ),
+                        );
+                      }
+
+                      return DataTable(
+                        dataRowMinHeight: 60,
+                        dataRowMaxHeight: 180,
+                        headingRowColor: WidgetStateProperty.all(
+                          const Color(0xFFF7F9FC),
+                        ),
+                        columns: const [
+                          DataColumn(
+                            label: Text(
+                              "Round Info / Date",
+                              style: TextStyle(fontWeight: FontWeight.bold),
                             ),
-                            columns: const [
-                              DataColumn(
-                                label: Text(
-                                  "Batch / Date",
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              "Driver / Vehicle",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              "Product / Warehouse",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              "Qty / Status",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          DataColumn(
+                            label: Text(
+                              "Actions",
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                        rows: projectRounds.map((r) {
+                          final List rItems = r['items'] ?? [];
+                          final projItems = rItems
+                              .where(
+                                (ri) =>
+                                    ri['project_id'] == selectedProject['id'],
+                              )
+                              .toList();
+
+                          final String roundCode =
+                              r['dispatch_code'] ?? 'DR-${r['id']}';
+                          final String dispatchDateStr =
+                              r['dispatch_date']?.toString().split('T').first ??
+                              '';
+                          final String driver = r['driver_name'] ?? 'ไม่ระบุ';
+                          final String plate = r['vehicle_plate'] ?? '-';
+                          final String status = r['status'] ?? 'Scheduled';
+
+                          Color statusColor = const Color(0xFF86868B);
+                          Color statusBg = const Color(0xFFF4F5F7);
+                          if (status == 'In Transit') {
+                            statusColor = const Color(0xFF2563EB);
+                            statusBg = const Color(0xFFEFF6FF);
+                          } else if (status == 'Delivered') {
+                            statusColor = const Color(0xFF059669);
+                            statusBg = const Color(0xFFF0FDF4);
+                          }
+
+                          return DataRow(
+                            cells: [
+                              DataCell(
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      roundCode,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    Text(
+                                      dispatchDateStr,
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF86868B),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              DataColumn(
-                                label: Text(
-                                  "Product Delivered",
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                              DataCell(
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      driver,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    Text(
+                                      "ทะเบียน: $plate",
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Color(0xFF64748B),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              DataColumn(
-                                label: Text(
-                                  "Qty",
-                                  style: TextStyle(fontWeight: FontWeight.bold),
+                              DataCell(
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: projItems.map((item) {
+                                      return Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 4,
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              item['product_item']?['name'] ??
+                                                  'สินค้าทั่วไป',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 12,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                            Text(
+                                              "คลัง: ${item['warehouse']?['name'] ?? 'Direct Shipped'}",
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                color: Color(0xFF64748B),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
                                 ),
                               ),
-                              DataColumn(
-                                label: Text(
-                                  "Defect",
-                                  style: TextStyle(fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ],
-                            rows: (selectedOrder['history'] as List).expand((
-                              hist,
-                            ) {
-                              return (hist['items'] as List).map((item) {
-                                return DataRow(
-                                  cells: [
-                                    DataCell(
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            hist['batch'],
+                              DataCell(
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      ...projItems.map((item) {
+                                        return Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 12,
+                                          ),
+                                          child: Text(
+                                            "${item['qty_to_deliver']} pcs",
                                             style: const TextStyle(
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF1E293B),
+                                              fontSize: 12,
                                             ),
                                           ),
+                                        );
+                                      }).toList(),
+                                      const SizedBox(height: 4),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: statusBg,
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          status,
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: statusColor,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                status == 'Scheduled'
+                                    ? ElevatedButton.icon(
+                                        onPressed: () =>
+                                            _confirmRound(_parseInt(r['id'])),
+                                        icon: const Icon(
+                                          Icons.local_shipping,
+                                          size: 14,
+                                        ),
+                                        label: const Text(
+                                          "Depart (ปล่อยรถ)",
+                                          style: TextStyle(fontSize: 11),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(
+                                            0xFF2563EB,
+                                          ),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : status == 'In Transit'
+                                    ? ElevatedButton.icon(
+                                        onPressed: () =>
+                                            _completeRound(_parseInt(r['id'])),
+                                        icon: const Icon(
+                                          Icons.check_circle_outline,
+                                          size: 14,
+                                        ),
+                                        label: const Text(
+                                          "Complete (ส่งสำเร็จ)",
+                                          style: TextStyle(fontSize: 11),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(
+                                            0xFF10B981,
+                                          ),
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : Row(
+                                        children: const [
+                                          Icon(
+                                            Icons.check_circle,
+                                            color: Color(0xFF10B981),
+                                            size: 16,
+                                          ),
+                                          SizedBox(width: 4),
                                           Text(
-                                            hist['date'],
-                                            style: const TextStyle(
-                                              fontSize: 11,
-                                              color: Color(0xFF86868B),
+                                            "Done",
+                                            style: TextStyle(
+                                              color: Color(0xFF10B981),
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
                                             ),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                    DataCell(Text(item['product'])),
-                                    DataCell(
-                                      Text(
-                                        "${item['qty']} pcs",
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                          color: Color(0xFF1E293B),
-                                        ),
-                                      ),
-                                    ),
-                                    DataCell(
-                                      Text(
-                                        "${item['defect']} pcs",
-                                        style: TextStyle(
-                                          color: item['defect'] > 0
-                                              ? const Color(0xFFEF4444)
-                                              : const Color(0xFF94A3B8),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              });
-                            }).toList(),
-                          ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      );
+                    }(),
                   ),
                   const SizedBox(height: 80),
                 ],
@@ -1262,7 +1722,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        child,
+        Semantics(label: label, container: true, child: child),
       ],
     );
   }

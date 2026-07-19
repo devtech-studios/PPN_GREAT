@@ -1,7 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-
-// === IMPORT ของคุณ (ปรับ Path ให้ตรงกับโปรเจกต์จริง) ===
+import '../../core/api/api_client.dart';
+import '../../core/api/api_endpoints.dart';
+import '../../core/auth/auth_service.dart';
 import '../../modules/auth/login_screen.dart';
 import '../../modules/containers/containers_screen.dart';
 import '../../modules/customers/create_customer_screen.dart';
@@ -311,8 +312,10 @@ class _MainLayoutState extends State<MainLayout> {
                 ),
               ),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(ctx);
+                  await AuthService().logout();
+                  if (!context.mounted) return;
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(
@@ -384,9 +387,163 @@ class _DashboardScreenState extends State<DashboardScreen> {
   OverlayEntry? _searchOverlay;
   final FocusNode _searchFocusNode = FocusNode();
 
+  final ApiClient _api = ApiClient();
+  
+  bool _isLoadingSummary = false;
+  bool _isLoadingActivities = false;
+  bool _isLoadingRevenueChart = false;
+  bool _isLoadingProjects = false;
+  
+  Map<String, dynamic>? _summaryData;
+  List<dynamic> _activitiesData = [];
+  List<dynamic> _revenueChartData = [];
+  List<dynamic> _projectsData = [];
+
+  Future<void> _fetchSummary() async {
+    setState(() => _isLoadingSummary = true);
+    try {
+      final response = await _api.get('/dashboard/summary');
+      if (response.data['success'] == true) {
+        setState(() {
+          _summaryData = response.data['data'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching dashboard summary: $e");
+    } finally {
+      setState(() => _isLoadingSummary = false);
+    }
+  }
+
+  Future<void> _fetchActivities() async {
+    setState(() => _isLoadingActivities = true);
+    try {
+      final response = await _api.get('/dashboard/activities');
+      if (response.data['success'] == true) {
+        setState(() {
+          _activitiesData = response.data['data'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching dashboard activities: $e");
+    } finally {
+      setState(() => _isLoadingActivities = false);
+    }
+  }
+
+  Future<void> _fetchRevenueChart() async {
+    setState(() => _isLoadingRevenueChart = true);
+    try {
+      final response = await _api.get('/dashboard/revenue-chart');
+      if (response.data['success'] == true) {
+        setState(() {
+          _revenueChartData = response.data['data'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching dashboard revenue chart: $e");
+    } finally {
+      setState(() => _isLoadingRevenueChart = false);
+    }
+  }
+
+  Future<void> _fetchProjects() async {
+    setState(() => _isLoadingProjects = true);
+    try {
+      final response = await _api.get(ProjectEndpoints.index);
+      if (response.data['success'] == true) {
+        setState(() {
+          _projectsData = response.data['data'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching dashboard projects: $e");
+    } finally {
+      setState(() => _isLoadingProjects = false);
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait([
+      _fetchSummary(),
+      _fetchActivities(),
+      _fetchRevenueChart(),
+      _fetchProjects(),
+    ]);
+  }
+
+  String _formatAmount(double value) {
+    if (value >= 1000000) {
+      return "${(value / 1000000).toStringAsFixed(1)}M";
+    } else if (value >= 1000) {
+      return "${(value / 1000).toStringAsFixed(0)}K";
+    }
+    return value.toStringAsFixed(0);
+  }
+
+  String _formatTime(String? createdAtStr) {
+    if (createdAtStr == null || createdAtStr.isEmpty) return "";
+    try {
+      final DateTime dt = DateTime.parse(createdAtStr).toLocal();
+      final DateTime now = DateTime.now();
+      final int diffDays = now.difference(dt).inDays;
+      final String hourMinute = "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
+      
+      if (diffDays == 0 && dt.day == now.day) {
+        return "Today, $hourMinute";
+      } else if (diffDays <= 1) {
+        return "Yesterday, $hourMinute";
+      } else {
+        return "${dt.day}/${dt.month}/${dt.year} $hourMinute";
+      }
+    } catch (e) {
+      if (createdAtStr.length >= 16) {
+        return createdAtStr.substring(0, 16).replaceAll('T', ' ');
+      }
+      return createdAtStr;
+    }
+  }
+
+  IconData _getActivityIcon(String action) {
+    final String act = action.toLowerCase();
+    if (act.contains('approve') || act.contains('confirm') || act.contains('success')) {
+      return Icons.check_circle;
+    } else if (act.contains('create') || act.contains('add')) {
+      return Icons.add_circle;
+    } else if (act.contains('upload') || act.contains('file')) {
+      return Icons.upload_file;
+    } else if (act.contains('pay') || act.contains('finance') || act.contains('money')) {
+      return Icons.attach_money;
+    } else if (act.contains('ship') || act.contains('deliver') || act.contains('container')) {
+      return Icons.local_shipping;
+    } else if (act.contains('reject') || act.contains('cancel') || act.contains('fail')) {
+      return Icons.cancel;
+    }
+    return Icons.info_outline;
+  }
+
+  Color _getActivityColor(String action) {
+    final String act = action.toLowerCase();
+    if (act.contains('approve') || act.contains('confirm') || act.contains('success')) {
+      return const Color(0xFF10B981);
+    } else if (act.contains('create') || act.contains('add')) {
+      return const Color(0xFF2563EB);
+    } else if (act.contains('upload') || act.contains('file')) {
+      return const Color(0xFF8B5CF6);
+    } else if (act.contains('pay') || act.contains('finance') || act.contains('money')) {
+      return const Color(0xFFF59E0B);
+    } else if (act.contains('ship') || act.contains('deliver') || act.contains('container')) {
+      return const Color(0xFF06B6D4);
+    } else if (act.contains('reject') || act.contains('cancel') || act.contains('fail')) {
+      return const Color(0xFFEF4444);
+    }
+    return const Color(0xFF64748B);
+  }
+
   @override
   void initState() {
     super.initState();
+    _refreshAll();
     _searchFocusNode.addListener(() {
       if (_searchFocusNode.hasFocus) {
         _showSearchDropdown();
@@ -554,8 +711,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: const [
-                            Text(
+                          children: [
+                            const Text(
                               "สวัสดี คุณ Pun 👋",
                               style: TextStyle(
                                 fontSize: 36,
@@ -564,10 +721,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 letterSpacing: -0.5,
                               ),
                             ),
-                            SizedBox(height: 8),
+                            const SizedBox(height: 8),
                             Text(
-                              "You have 12 active projects today",
-                              style: TextStyle(
+                              _summaryData != null
+                                  ? "You have ${_summaryData!['active_projects_count']} active projects today"
+                                  : "Loading active projects today...",
+                              style: const TextStyle(
                                 fontSize: 16,
                                 color: Color(0xFF64748B),
                                 fontWeight: FontWeight.w500,
@@ -612,7 +771,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 30),
 
                   // --- SECTION 2: Active Projects ---
-                  const ActiveProjectsSection(),
+                  ActiveProjectsSection(
+                    projects: _projectsData,
+                    isLoading: _isLoadingProjects,
+                  ),
                   const SizedBox(height: 48),
 
                   // --- SECTION 3: Cashflow & Upcoming Schedule ---
@@ -750,30 +912,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  _buildTimelineItem(
-                    "Lion approved sample V2",
-                    "10:00 AM",
-                    const Color(0xFF10B981),
-                    Icons.check_circle,
-                  ),
-                  _buildTimelineItem(
-                    "Supplier uploaded PI",
-                    "09:30 AM",
-                    const Color(0xFF2563EB),
-                    Icons.upload_file,
-                  ),
-                  _buildTimelineItem(
-                    "Payment received - PPN-001",
-                    "Yesterday",
-                    const Color(0xFFF59E0B),
-                    Icons.attach_money,
-                  ),
-                  _buildTimelineItem(
-                    "Shipment departed China",
-                    "Yesterday",
-                    const Color(0xFF8B5CF6),
-                    Icons.flight_takeoff,
-                  ),
+                  _activitiesData.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(
+                            child: Text(
+                              "No activities recorded.",
+                              style: TextStyle(color: Color(0xFF94A3B8)),
+                            ),
+                          ),
+                        )
+                      : Column(
+                          children: _activitiesData.map((activity) {
+                            final String action = activity['action']?.toString() ?? "";
+                            final String desc = activity['description']?.toString() ?? "";
+                            final String timeStr = _formatTime(activity['created_at']?.toString());
+                            
+                            return _buildTimelineItem(
+                              desc,
+                              timeStr,
+                              _getActivityColor(action),
+                              _getActivityIcon(action),
+                            );
+                          }).toList(),
+                        ),
                 ],
               ),
             ),
@@ -788,6 +950,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // =========================================================
 
   Widget _buildCashflowOverview() {
+    final double revenueMtd = _summaryData != null
+        ? double.tryParse(_summaryData!['revenue_mtd'].toString()) ?? 0.0
+        : 3200000.0;
+    final double pendingPayments = _summaryData != null
+        ? double.tryParse(_summaryData!['pending_payments_amount'].toString()) ?? 0.0
+        : 2800000.0;
+    final double netBalance = revenueMtd - pendingPayments;
+
+    final String incomingStr = "+ ฿${_formatAmount(revenueMtd)}";
+    final String outgoingStr = "- ฿${_formatAmount(pendingPayments)}";
+    final String netBalanceStr = "${netBalance >= 0 ? '+' : '-'} ฿${_formatAmount(netBalance.abs())}";
+
+    double maxTotal = 1.0;
+    for (var item in _revenueChartData) {
+      double val = double.tryParse(item['total'].toString()) ?? 0.0;
+      if (val > maxTotal) {
+        maxTotal = val;
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
@@ -857,23 +1039,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               _buildFinanceSummary(
                 "Incoming",
-                "+ ฿3.2M",
+                _summaryData != null ? incomingStr : "+ ฿3.2M",
                 const Color(0xFF10B981),
                 true,
                 "22%",
               ),
               _buildFinanceSummary(
                 "Outgoing",
-                "- ฿2.8M",
+                _summaryData != null ? outgoingStr : "- ฿2.8M",
                 const Color(0xFFEF4444),
                 false,
                 "8%",
               ),
               _buildFinanceSummary(
                 "Net Balance",
-                "+ ฿400K",
+                _summaryData != null ? netBalanceStr : "+ ฿400K",
                 const Color(0xFF2563EB),
-                true,
+                netBalance >= 0,
                 "15%",
               ),
             ],
@@ -893,12 +1075,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               borderRadius: BorderRadius.circular(16),
             ),
-            child: const Center(
-              child: Text(
-                "Apple Finance Spline Chart Placeholder",
-                style: TextStyle(color: Color(0xFF94A3B8)),
-              ),
-            ),
+            child: _revenueChartData.isEmpty
+                ? const Center(
+                    child: Text(
+                      "Loading chart data...",
+                      style: TextStyle(color: Color(0xFF94A3B8)),
+                    ),
+                  )
+                : Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: _revenueChartData.map((item) {
+                        final double val = double.tryParse(item['total'].toString()) ?? 0.0;
+                        final double ratio = maxTotal > 0 ? (val / maxTotal) : 0.0;
+                        final String monthStr = item['month'].toString();
+                        final String displayMonth = monthStr.split('-').last;
+                        
+                        return Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                if (val > 0)
+                                  Text(
+                                    _formatAmount(val),
+                                    style: const TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF2563EB),
+                                    ),
+                                  )
+                                else
+                                  const Text(
+                                    "",
+                                    style: TextStyle(fontSize: 9),
+                                  ),
+                                const SizedBox(height: 4),
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 500),
+                                  height: (ratio * 80).clamp(4.0, 80.0),
+                                  decoration: BoxDecoration(
+                                    color: val > 0 
+                                        ? const Color(0xFF2563EB) 
+                                        : const Color(0xFF2563EB).withOpacity(0.1),
+                                    borderRadius: const BorderRadius.only(
+                                      topLeft: Radius.circular(4),
+                                      topRight: Radius.circular(4),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  displayMonth,
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
           ),
           const SizedBox(height: 16),
           Align(
@@ -1277,7 +1521,14 @@ class _HoverCardWidgetState extends State<HoverCardWidget> {
 // ACTIVE PROJECTS SECTION (Handles Cards & Table View)
 // =========================================================
 class ActiveProjectsSection extends StatefulWidget {
-  const ActiveProjectsSection({super.key});
+  final List<dynamic> projects;
+  final bool isLoading;
+
+  const ActiveProjectsSection({
+    super.key,
+    required this.projects,
+    required this.isLoading,
+  });
 
   @override
   State<ActiveProjectsSection> createState() => _ActiveProjectsSectionState();
@@ -1292,96 +1543,94 @@ class _ActiveProjectsSectionState extends State<ActiveProjectsSection> {
   bool _isTabsHovered = false;
   bool _isCardsHovered = false;
 
-  final List<Map<String, dynamic>> _tabsData = [
-    {"name": "All Active", "count": 12, "color": const Color(0xFF0F172A)},
-    {"name": "Inquiry", "count": 2, "color": const Color(0xFFF59E0B)},
-    {"name": "Artwork", "count": 1, "color": const Color(0xFF8B5CF6)},
-    {"name": "Deposit", "count": 1, "color": const Color(0xFFEF4444)},
-    {"name": "Sample", "count": 1, "color": const Color(0xFFEC4899)},
-    {"name": "Production", "count": 4, "color": const Color(0xFF2563EB)},
-    {"name": "Shipping", "count": 2, "color": const Color(0xFF06B6D4)},
-    {"name": "Delivered", "count": 1, "color": const Color(0xFF10B981)},
-  ];
+  String _formatAmount(double value) {
+    if (value >= 1000000) {
+      return "${(value / 1000000).toStringAsFixed(1)}M";
+    } else if (value >= 1000) {
+      return "${(value / 1000).toStringAsFixed(0)}K";
+    }
+    return value.toStringAsFixed(0);
+  }
 
-  final List<Map<String, dynamic>> _mockProjects = [
-    {
-      "id": "PPN-005",
-      "customer": "Tesla",
-      "status": "Inquiry",
-      "statusColor": const Color(0xFFF59E0B),
-      "budget": "฿2.5M",
-      "qty": "5,000 pcs",
-      "due": "Due in 15d",
-      "urgency": const Color(0xFFEF4444),
-      "progress": 0.1,
-    },
-    {
-      "id": "PPN-009",
-      "customer": "Central Group",
-      "status": "Artwork",
-      "statusColor": const Color(0xFF8B5CF6),
-      "budget": "฿800K",
-      "qty": "2,000 pcs",
-      "due": "Due in 1.2 mo",
-      "urgency": const Color(0xFFF59E0B),
-      "progress": 0.25,
-    },
-    {
-      "id": "PPN-010",
-      "customer": "AIS",
-      "status": "Deposit",
-      "statusColor": const Color(0xFFEF4444),
-      "budget": "฿1.2M",
-      "qty": "10,000 pcs",
-      "due": "Due in 2 mo",
-      "urgency": const Color(0xFF10B981),
-      "progress": 0.3,
-    },
-    {
-      "id": "PPN-001",
-      "customer": "Lion",
-      "status": "Sample",
-      "statusColor": const Color(0xFFEC4899),
-      "budget": "฿450K",
-      "qty": "1,000 pcs",
-      "due": "Due in 20d",
-      "urgency": const Color(0xFFEF4444),
-      "progress": 0.4,
-    },
-    {
-      "id": "PPN-002",
-      "customer": "Kodomo",
-      "status": "Production",
-      "statusColor": const Color(0xFF2563EB),
-      "budget": "฿3.1M",
-      "qty": "15,000 pcs",
-      "due": "Due in 2 mo",
-      "urgency": const Color(0xFF10B981),
-      "progress": 0.65,
-    },
-    {
-      "id": "PPN-008",
-      "customer": "Siam Paragon",
-      "status": "Shipping",
-      "statusColor": const Color(0xFF06B6D4),
-      "budget": "฿950K",
-      "qty": "3,500 pcs",
-      "due": "Due in 1 mo",
-      "urgency": const Color(0xFFF59E0B),
-      "progress": 0.85,
-    },
-    {
-      "id": "PPN-003",
-      "customer": "Line Man",
-      "status": "Delivered",
-      "statusColor": const Color(0xFF10B981),
-      "budget": "฿1.5M",
-      "qty": "5,000 pcs",
-      "due": "Delivered",
-      "urgency": const Color(0xFF10B981),
-      "progress": 1.0,
-    },
-  ];
+  List<Map<String, dynamic>> get _tabsData {
+    int countByStatus(String status) {
+      if (status == "All Active") {
+        return widget.projects.where((p) => p['status'] != 'Delivered' && p['status'] != 'Cancelled').length;
+      }
+      return widget.projects.where((p) => p['status'] == status).length;
+    }
+    
+    return [
+      {"name": "All Active", "count": countByStatus("All Active"), "color": const Color(0xFF0F172A)},
+      {"name": "Inquiry", "count": countByStatus("Inquiry"), "color": const Color(0xFFF59E0B)},
+      {"name": "Artwork", "count": countByStatus("Artwork"), "color": const Color(0xFF8B5CF6)},
+      {"name": "Deposit", "count": countByStatus("Deposit"), "color": const Color(0xFFEF4444)},
+      {"name": "Sample", "count": countByStatus("Sample"), "color": const Color(0xFFEC4899)},
+      {"name": "Production", "count": countByStatus("Production"), "color": const Color(0xFF2563EB)},
+      {"name": "Shipping", "count": countByStatus("Shipping"), "color": const Color(0xFF06B6D4)},
+      {"name": "Delivered", "count": countByStatus("Delivered"), "color": const Color(0xFF10B981)},
+    ];
+  }
+
+  List<Map<String, dynamic>> get _processedProjects {
+    return widget.projects.map((p) {
+      final String code = p['project_code']?.toString() ?? 'PPN-XXX';
+      final String customerName = p['customer']?['name']?.toString() ?? 'Unknown Customer';
+      final String status = p['status']?.toString() ?? 'Inquiry';
+      
+      Color statusColor = const Color(0xFF64748B);
+      switch (status) {
+        case 'Inquiry': statusColor = const Color(0xFFF59E0B); break;
+        case 'Artwork': statusColor = const Color(0xFF8B5CF6); break;
+        case 'Deposit': statusColor = const Color(0xFFEF4444); break;
+        case 'Sample': statusColor = const Color(0xFFEC4899); break;
+        case 'Production': statusColor = const Color(0xFF2563EB); break;
+        case 'Shipping': statusColor = const Color(0xFF06B6D4); break;
+        case 'Delivered': statusColor = const Color(0xFF10B981); break;
+      }
+      
+      final double budgetVal = double.tryParse(p['order_value']?.toString() ?? '0') ?? 0.0;
+      final String budgetStr = budgetVal > 0 ? "฿${_formatAmount(budgetVal)}" : "฿0";
+      
+      int totalQty = 0;
+      final List<dynamic>? productItems = p['product_items'] as List<dynamic>?;
+      if (productItems != null) {
+        for (var item in productItems) {
+          totalQty += int.tryParse(item['qty']?.toString() ?? '0') ?? 0;
+        }
+      }
+      final String qtyStr = "$totalQty pcs";
+      
+      final String rawTargetDate = p['target_date']?.toString() ?? "";
+      final String checkInStr = rawTargetDate.split(' ').first.split('T').first;
+      final String dueStr = checkInStr.isNotEmpty ? "Due: $checkInStr" : "No Due Date";
+      
+      double progress = 0.05;
+      Color urgencyColor = const Color(0xFF10B981);
+      switch (status) {
+        case 'Inquiry': progress = 0.1; urgencyColor = const Color(0xFFF59E0B); break;
+        case 'Artwork': progress = 0.25; urgencyColor = const Color(0xFF8B5CF6); break;
+        case 'Deposit': progress = 0.4; urgencyColor = const Color(0xFFEF4444); break;
+        case 'Sample': progress = 0.55; urgencyColor = const Color(0xFFEC4899); break;
+        case 'Production': progress = 0.75; urgencyColor = const Color(0xFF2563EB); break;
+        case 'Shipping': progress = 0.9; urgencyColor = const Color(0xFF06B6D4); break;
+        case 'Delivered': progress = 1.0; urgencyColor = const Color(0xFF10B981); break;
+      }
+
+      return {
+        "db_id": p['id'],
+        "id": code,
+        "customer": customerName,
+        "status": status,
+        "statusColor": statusColor,
+        "budget": budgetStr,
+        "qty": qtyStr,
+        "due": dueStr,
+        "urgency": urgencyColor,
+        "progress": progress,
+      };
+    }).toList();
+  }
 
   @override
   void dispose() {
@@ -1593,8 +1842,8 @@ class _ActiveProjectsSectionState extends State<ActiveProjectsSection> {
           double cardWidth = (constraints.maxWidth - (spacing * 2)) / 3;
 
           List<Map<String, dynamic>> filtered = _selectedTab == "All Active"
-              ? _mockProjects
-              : _mockProjects
+              ? _processedProjects
+              : _processedProjects
                     .where((p) => p['status'] == _selectedTab)
                     .toList();
 
@@ -1689,8 +1938,8 @@ class _ActiveProjectsSectionState extends State<ActiveProjectsSection> {
 
   Widget _buildTableView() {
     List<Map<String, dynamic>> filtered = _selectedTab == "All Active"
-        ? _mockProjects
-        : _mockProjects.where((p) => p['status'] == _selectedTab).toList();
+        ? _processedProjects
+        : _processedProjects.where((p) => p['status'] == _selectedTab).toList();
 
     return Container(
       key: ValueKey("Table_$_selectedTab"),

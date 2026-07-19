@@ -1,6 +1,11 @@
 import 'dart:ui';
-
+import 'dart:typed_data';
+import 'dart:js' as js;
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart';
+import '../../core/api/api_client.dart';
+import '../../core/api/api_endpoints.dart';
 
 class MouseDraggableScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -18,86 +23,14 @@ class UploadDesignScreen extends StatefulWidget {
 }
 
 class _UploadDesignScreenState extends State<UploadDesignScreen> {
+  final ApiClient _api = ApiClient();
+  bool _isLoadingProjects = false;
+  bool _isLoadingArtworks = false;
+  List<dynamic> _projectsDb = [];
+  List<dynamic> _dbArtworks = [];
+
   String _searchText = "";
   String _selectedProjectId = "PRJ-008";
-
-  // ==========================================
-  // Mock Data: ข้อมูลประวัติ Artwork 🌟 (เพิ่ม attempt)
-  // ==========================================
-  final List<Map<String, dynamic>> _artworkProjects = [
-    {
-      "id": "PRJ-008",
-      "customer": "AIS",
-      "status": "In Progress",
-      "products": [
-        {
-          "name": "ร่มพับ 2 ตอน พรีเมียม",
-          "qty": "3,000 คัน",
-          "specs": "ร่มสีเขียว AIS สกรีนอุ่นใจ 2 จุด (กางออกขนาด 21 นิ้ว)",
-          "artwork_logs": [
-            {
-              "id": "ART-001",
-              "attempt": 1, // 🌟 ครั้งที่ 1
-              "ver": "V1",
-              "source": "In-house Designer",
-              "status": "Need Revision",
-              "date": "20 May 2026",
-              "file_name": "Umbrella_AIS_V1.jpg",
-              "feedback":
-                  "ลูกค้าแจ้งว่า โลโก้น้องอุ่นใจเล็กเกินไป ขอขยายขึ้น 20%",
-            },
-            {
-              "id": "ART-002",
-              "attempt": 2, // 🌟 ครั้งที่ 2
-              "ver": "V2",
-              "source": "Freelance",
-              "status": "Approved by Client",
-              "date": "22 May 2026",
-              "file_name": "Umbrella_AIS_V2_Final.png",
-              "feedback":
-                  "ลูกค้าคอนเฟิร์มแบบ V2 เรียบร้อย ส่งให้โรงงานผลิตได้เลย",
-            },
-            {
-              "id": "ART-003",
-              "attempt": 3, // 🌟 ครั้งที่ 3
-              "ver": "V2.1 (Factory Proof)",
-              "source": "Supplier",
-              "status": "Awaiting Approval",
-              "date": "25 May 2026",
-              "file_name": "Factory_Template_AIS.pdf",
-              "feedback":
-                  "โรงงานตีเส้นลงบนแพทเทิร์นร่มจริง (Factory Proof) ให้เซลส์ตรวจสอบความถูกต้องก่อนสกรีนจริง",
-            },
-          ],
-        },
-      ],
-    },
-    {
-      "id": "PRJ-015",
-      "customer": "Cafe Amazon",
-      "status": "Waiting Artwork",
-      "products": [
-        {
-          "name": "แก้วน้ำพลาสติก 22oz (Reusable Cup)",
-          "qty": "50,000 ใบ",
-          "specs": "แก้วพลาสติก PP ฉีดสีเขียว Amazon สกรีนลายรอบใบ",
-          "artwork_logs": [
-            {
-              "id": "ART-004",
-              "attempt": 1, // 🌟 ครั้งที่ 1
-              "ver": "V1",
-              "source": "Customer Provided",
-              "status": "Need Revision",
-              "date": "01 Jun 2026",
-              "file_name": "Amazon_Cup_Design.pdf",
-              "feedback":
-                  "ไฟล์ที่ลูกค้าส่งมาเป็น RGB กราฟิกแจ้งให้ลูกค้าแปลงเป็น CMYK/Pantone ก่อน",
-            },
-          ],
-        },
-      ],
-    },
-  ];
 
   final List<String> _artworkStages = [
     "Awaiting Approval",
@@ -108,13 +41,120 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
     "Rejected",
   ];
 
-  List<Map<String, dynamic>> _getFilteredProjects() {
-    if (_searchText.isEmpty) return _artworkProjects;
-    String searchLower = _searchText.toLowerCase();
-    return _artworkProjects.where((p) {
-      return p['customer'].toString().toLowerCase().contains(searchLower) ||
-          p['id'].toString().toLowerCase().contains(searchLower);
+  String _getFullFileUrl(String filePath) {
+    if (filePath.isEmpty) return "";
+    if (filePath.startsWith('http')) {
+      return filePath;
+    }
+    // Extract filename (e.g. "/storage/artworks/abc.jpg" -> "abc.jpg")
+    String fileName = filePath.split('/').last;
+    // Route it through the CORS-enabled public API file endpoint
+    return '${ApiConfig.baseUrl}/artworks/file/$fileName';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProjects();
+  }
+
+  Future<void> _fetchProjects() async {
+    setState(() {
+      _isLoadingProjects = true;
+    });
+    try {
+      final response = await _api.get(ProjectEndpoints.index, queryParameters: {
+        if (_searchText.isNotEmpty) 'search': _searchText,
+      });
+      final body = response.data;
+      if (body['success'] == true) {
+        setState(() {
+          _projectsDb = body['data'];
+          if (_projectsDb.isNotEmpty) {
+            final exists = _projectsDb.any((p) => p['project_code'] == _selectedProjectId);
+            if (!exists) {
+              _selectedProjectId = _projectsDb[0]['project_code'] ?? "";
+              _fetchArtworksForProject(_projectsDb[0]['id']);
+            } else {
+              final match = _projectsDb.firstWhere((p) => p['project_code'] == _selectedProjectId);
+              _fetchArtworksForProject(match['id']);
+            }
+          } else {
+            _selectedProjectId = "";
+            _dbArtworks = [];
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching projects for artworks: $e");
+    } finally {
+      setState(() {
+        _isLoadingProjects = false;
+      });
+    }
+  }
+
+  Future<void> _fetchArtworksForProject(int pid) async {
+    setState(() {
+      _isLoadingArtworks = true;
+    });
+    try {
+      final response = await _api.get(ArtworkEndpoints.byProject(pid));
+      final body = response.data;
+      if (body['success'] == true) {
+        setState(() {
+          _dbArtworks = body['data'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching artworks: $e");
+    } finally {
+      setState(() {
+        _isLoadingArtworks = false;
+      });
+    }
+  }
+
+  Map<String, dynamic> _mapDbProjectToArtworkMock(Map<String, dynamic> dbProject) {
+    final List<dynamic> dbProducts = dbProject['product_items'] ?? [];
+    final List<Map<String, dynamic>> mappedProducts = dbProducts.map((p) {
+      final int pId = p['id'];
+      final List<dynamic> productArtworks = _dbArtworks.where((a) => a['product_item_id'] == pId).toList();
+      final List<Map<String, dynamic>> mappedLogs = productArtworks.map((a) {
+        return {
+          "id": a['artwork_code'] ?? "ART-000",
+          "db_id": a['id'],
+          "attempt": a['attempt'] ?? 1,
+          "ver": a['version'] ?? "V1",
+          "source": a['source'] ?? "In-house Designer",
+          "status": a['status'] ?? "Awaiting Approval",
+          "date": a['created_at'] != null ? a['created_at'].toString().split('T')[0] : "-",
+          "file_name": a['file_name'] ?? "no_name.jpg",
+          "file_path": a['file_path'] ?? "",
+          "feedback": a['feedback'] ?? "ไม่มีข้อคิดเห็นเพิ่มเติม",
+        };
+      }).toList();
+
+      return {
+        "id": pId,
+        "name": p['name'] ?? "สินค้าทั่วไป",
+        "qty": "${p['qty'] ?? 0} ${p['unit'] ?? 'หน่วย'}",
+        "specs": p['specs'] ?? "ไม่มีรายละเอียดข้อมูลจำเพาะ",
+        "artwork_logs": mappedLogs,
+      };
     }).toList();
+
+    return {
+      "id": dbProject['project_code'] ?? "PRJ-000",
+      "db_id": dbProject['id'],
+      "customer": dbProject['customer']?['name'] ?? "ลูกค้าทั่วไป",
+      "status": dbProject['status'] ?? "Inquiry",
+      "products": mappedProducts,
+    };
+  }
+
+  List<Map<String, dynamic>> _getFilteredProjects() {
+    return _projectsDb.map((p) => _mapDbProjectToArtworkMock(p)).toList();
   }
 
   @override
@@ -208,7 +248,10 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
                     vertical: 8,
                   ),
                   child: TextField(
-                    onChanged: (val) => setState(() => _searchText = val),
+                    onChanged: (val) {
+                      setState(() => _searchText = val);
+                      _fetchProjects();
+                    },
                     decoration: InputDecoration(
                       hintText: "ค้นหารหัส, ชื่อลูกค้า...",
                       prefixIcon: const Icon(
@@ -243,8 +286,10 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
                             final isSelected = _selectedProjectId == p['id'];
 
                             return InkWell(
-                              onTap: () =>
-                                  setState(() => _selectedProjectId = p['id']),
+                              onTap: () {
+                                setState(() => _selectedProjectId = p['id']);
+                                _fetchArtworksForProject(p['db_id']);
+                              },
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
                                 margin: const EdgeInsets.only(bottom: 12),
@@ -696,8 +741,19 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
                             (s) => DropdownMenuItem(value: s, child: Text(s)),
                           )
                           .toList(),
-                      onChanged: (val) {
-                        setState(() => log['status'] = val!);
+                      onChanged: (val) async {
+                        try {
+                          final response = await _api.patch(
+                            ArtworkEndpoints.status(log['db_id']),
+                            data: {'status': val!},
+                          );
+                          if (response.data['success'] == true) {
+                            final match = _projectsDb.firstWhere((p) => p['project_code'] == _selectedProjectId);
+                            _fetchArtworksForProject(match['id']);
+                          }
+                        } catch (e) {
+                          debugPrint("Error updating artwork status: $e");
+                        }
                       },
                     ),
                   ),
@@ -718,22 +774,100 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // กล่องภาพจำลอง
-                      Container(
-                        width: double.infinity,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE2E8F0)),
-                        ),
-                        child: const Center(
-                          child: Icon(
-                            Icons.image,
-                            color: Color(0xFFCBD5E1),
-                            size: 40,
-                          ),
-                        ),
+                      // กล่องแสดงภาพหรือไฟล์จริง
+                      Builder(
+                        builder: (context) {
+                          debugPrint("--> ARTWORK LOG DATA: $log");
+                          final String filePath = log['file_path'] ?? '';
+                          final String fileName = log['file_name'] ?? '';
+                          final String lowerPath = filePath.toLowerCase();
+                          final bool isImage = lowerPath.endsWith('.jpg') ||
+                              lowerPath.endsWith('.jpeg') ||
+                              lowerPath.endsWith('.png');
+                          debugPrint("--> filePath: '$filePath', lowerPath: '$lowerPath', isImage: $isImage");
+                          final String fullUrl = _getFullFileUrl(filePath);
+
+                          return InkWell(
+                            onTap: () {
+                              if (filePath.isNotEmpty) {
+                                try {
+                                  js.context.callMethod('open', [fullUrl, '_blank']);
+                                } catch (e) {
+                                  debugPrint("Error opening URL: $e");
+                                }
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              width: double.infinity,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF1F5F9),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(11),
+                                child: isImage
+                                    ? Image.network(
+                                        fullUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return const Center(
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.broken_image_outlined, color: Colors.redAccent, size: 32),
+                                                SizedBox(height: 4),
+                                                Text("โหลดภาพล้มเหลว", style: TextStyle(fontSize: 10, color: Color(0xFF64748B))),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      )
+                                    : Center(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              lowerPath.endsWith('.pdf')
+                                                  ? Icons.picture_as_pdf
+                                                  : Icons.insert_drive_file,
+                                              color: lowerPath.endsWith('.pdf')
+                                                  ? Colors.redAccent
+                                                  : const Color(0xFF3B82F6),
+                                              size: 36,
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Padding(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                              child: Text(
+                                                fileName.length > 20
+                                                    ? '${fileName.substring(0, 17)}...'
+                                                    : fileName,
+                                                textAlign: TextAlign.center,
+                                                style: const TextStyle(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Color(0xFF475569),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            const Text(
+                                              "คลิกเพื่อเปิดดูไฟล์",
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                color: Color(0xFF94A3B8),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          );
+                        }
                       ),
                       const SizedBox(height: 16),
                       _buildInfoRow("Date:", log['date']),
@@ -879,9 +1013,10 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
     BuildContext context,
     Map<String, dynamic> project,
   ) {
-    String selectedProduct = project['products'][0]['name'];
+    int selectedProduct = project['products'][0]['id'];
     String source = "In-house Designer";
-    String fileName = "";
+    Uint8List? pickedFileBytes;
+    String? pickedFileName;
     String note = "";
     String status = "Awaiting Approval";
 
@@ -915,8 +1050,8 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedProduct,
+                    DropdownButtonFormField<int>(
+                      value: selectedProduct,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: const Color(0xFFF4F5F7),
@@ -927,9 +1062,9 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
                       ),
                       items: (project['products'] as List)
                           .map(
-                            (p) => DropdownMenuItem<String>(
-                              value: p['name'],
-                              child: Text(p['name']),
+                            (p) => DropdownMenuItem<int>(
+                              value: p['id'] as int,
+                              child: Text(p['name'] ?? 'สินค้า #${p['id']}'),
                             ),
                           )
                           .toList(),
@@ -973,7 +1108,7 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
                     const SizedBox(height: 16),
 
                     const Text(
-                      "3. Status & File Name",
+                      "3. Status & File Upload",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
@@ -1007,17 +1142,36 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: TextFormField(
-                            decoration: InputDecoration(
-                              hintText: "E.g. Logo_V1.jpg",
-                              filled: true,
-                              fillColor: const Color(0xFFF4F5F7),
-                              border: OutlineInputBorder(
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              side: const BorderSide(color: Color(0xFFE2E8F0)),
+                              shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide.none,
                               ),
                             ),
-                            onChanged: (val) => fileName = val,
+                            icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+                            label: Text(
+                              pickedFileName ?? "Choose File",
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                color: Color(0xFF1E293B),
+                              ),
+                            ),
+                            onPressed: () async {
+                              final result = await FilePicker.pickFiles(
+                                type: FileType.custom,
+                                allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf', 'ai', 'psd'],
+                                withData: true,
+                              );
+                              if (result != null && result.files.isNotEmpty) {
+                                setDialogState(() {
+                                  pickedFileBytes = result.files.first.bytes;
+                                  pickedFileName = result.files.first.name;
+                                });
+                              }
+                            },
                           ),
                         ),
                       ],
@@ -1055,29 +1209,65 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
                 child: const Text("Cancel"),
               ),
               ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    var prod = (project['products'] as List).firstWhere(
-                      (p) => p['name'] == selectedProduct,
+                onPressed: () async {
+                  if (pickedFileBytes == null || pickedFileName == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("กรุณาเลือกไฟล์ Artwork ก่อนบันทึก")),
                     );
-                    if (prod['artwork_logs'] == null) prod['artwork_logs'] = [];
+                    return;
+                  }
 
-                    // 🌟 คำนวณครั้งที่ (Attempt)
-                    int attemptNum = (prod['artwork_logs'] as List).length + 1;
-
-                    prod['artwork_logs'].add({
-                      "id": "ART-NEW-$attemptNum",
-                      "attempt": attemptNum, // 🌟 เพิ่ม attempt ตอนกดเซฟ
-                      "ver": "V$attemptNum",
-                      "source": source,
-                      "status": status,
-                      "date": "Today",
-                      "file_name": fileName.isEmpty
-                          ? "Artwork_V$attemptNum.jpg"
-                          : fileName,
-                      "feedback": note,
+                  final int productItemId = selectedProduct;
+                  final int projectDbId = project['db_id'];
+                  
+                  final existingLogs = _dbArtworks.where((a) => a['product_item_id'] == productItemId).toList();
+                  final int nextAttempt = existingLogs.length + 1;
+                  final String computedVersion = 'V$nextAttempt';
+                  
+                  try {
+                    // 1. Upload the file to POST /api/artworks/upload
+                    final formData = FormData.fromMap({
+                      'file': MultipartFile.fromBytes(
+                        pickedFileBytes!,
+                        filename: pickedFileName!,
+                      ),
                     });
-                  });
+
+                    final uploadResponse = await _api.post(
+                      ArtworkEndpoints.upload,
+                      data: formData,
+                    );
+
+                    if (uploadResponse.data['success'] == true) {
+                      final String serverFileName = uploadResponse.data['file_name'];
+                      final String serverFilePath = uploadResponse.data['file_path'];
+
+                      // 2. Save the artwork log with the uploaded file details
+                      final storeResponse = await _api.post(ArtworkEndpoints.store, data: {
+                        'project_id': projectDbId,
+                        'product_item_id': productItemId,
+                        'version': computedVersion,
+                        'source': source,
+                        'file_name': serverFileName,
+                        'file_path': serverFilePath,
+                        'feedback': note.isNotEmpty ? note : null,
+                      });
+                      
+                      if (storeResponse.data['success'] == true) {
+                        final int newArtworkId = storeResponse.data['data']['id'];
+                        
+                        await _api.patch(ArtworkEndpoints.status(newArtworkId), data: {
+                          'status': status,
+                          'feedback': note.isNotEmpty ? note : null,
+                        });
+
+                        _fetchArtworksForProject(projectDbId);
+                      }
+                    }
+                  } catch (e) {
+                    debugPrint("Error storing artwork: $e");
+                  }
+                  
                   Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
@@ -1129,8 +1319,19 @@ class _UploadDesignScreenState extends State<UploadDesignScreen> {
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            onPressed: () {
-              setState(() => log['feedback'] = feedback);
+            onPressed: () async {
+              try {
+                final response = await _api.put(
+                  ArtworkEndpoints.update(log['db_id']),
+                  data: {'feedback': feedback},
+                );
+                if (response.data['success'] == true) {
+                  final match = _projectsDb.firstWhere((p) => p['project_code'] == _selectedProjectId);
+                  _fetchArtworksForProject(match['id']);
+                }
+              } catch (e) {
+                debugPrint("Error updating artwork feedback: $e");
+              }
               Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(

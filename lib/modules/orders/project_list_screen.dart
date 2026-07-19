@@ -1,5 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../core/api/api_client.dart';
+import '../../core/api/api_endpoints.dart';
+import '../../core/api/api_error_handler.dart';
 import 'create_project_screen.dart';
 
 class MouseDraggableScrollBehavior extends MaterialScrollBehavior {
@@ -18,17 +21,19 @@ class ProjectListScreen extends StatefulWidget {
 }
 
 class _ProjectListScreenState extends State<ProjectListScreen> {
-  // 🌟 สถานะ UI 3 ระดับ
-  // 0 = พับเก็บซ้ายสุด (ซ่อนลิสต์)
-  // 1 = ขนาดปกติแบ่งครึ่ง (ลิสต์ซ้าย 380px)
-  // 2 = กางเป็น Drawer ทับหน้าขวา
-  int _listViewState = 1;
+  // API client
+  final ApiClient _api = ApiClient();
+  bool _isLoadingList = false;
+  bool _isLoadingDetail = false;
+  List<dynamic> _projectsListDb = [];
+  Map<String, dynamic>? _selectedProjectDetail;
 
+  // UI state
+  int _listViewState = 1;
   String _selectedStatusFilter = "All Status";
   String _searchText = "";
   String _selectedSort = "Target Date";
   bool _isTableView = false;
-
   String _selectedProjectId = "PPN-001";
 
   final ScrollController _tabsScrollController = ScrollController();
@@ -45,191 +50,250 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     "Delivered",
   ];
 
-  // ==========================================
-  // Mock Data: เพิ่ม Credit Term, OCPB และ Shipping Mark
-  // ==========================================
-  final List<Map<String, dynamic>> _projects = [
-    {
-      "id": "PPN-001",
-      "customer": "Lion (Thailand)",
-      "status": "Production",
-      "date": "24 May 2026",
-      "due_date": "15 Aug 2026",
-      "step": 2,
-      "is_active": true,
-      "is_paid": true,
-      "days_left": 79,
-      "days_in_stage": 14,
-      "order_value": "฿1.7M",
-      "usage_location": "Marketing campaign in Laos only",
-      "finance": {"deposit": true, "balance": false, "credit_term": "30 Days"},
-      "compliance": {"ocpb": true, "shipping_mark": false},
-      "products": [
+  @override
+  void initState() {
+    super.initState();
+    _fetchProjects();
+  }
+
+  @override
+  void dispose() {
+    _tabsScrollController.dispose();
+    _cardsScrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchProjects() async {
+    setState(() {
+      _isLoadingList = true;
+    });
+    try {
+      String? statusParam;
+      if (_selectedStatusFilter != "All Status" && _selectedStatusFilter != "All Active") {
+        statusParam = _selectedStatusFilter;
+      }
+      
+      final response = await _api.get(ProjectEndpoints.index, queryParameters: {
+        if (_searchText.isNotEmpty) 'search': _searchText,
+        if (statusParam != null) 'status': statusParam,
+        if (_selectedSort == "Target Date") ...{
+          'sort': 'target_date',
+          'order': 'asc',
+        } else if (_selectedSort == "Order Value") ...{
+          'sort': 'created_at',
+          'order': 'desc',
+        } else if (_selectedSort == "Date Created") ...{
+          'sort': 'created_at',
+          'order': 'asc',
+        }
+      });
+
+      final body = response.data;
+      if (body['success'] == true) {
+        setState(() {
+          _projectsListDb = body['data'];
+          if (_projectsListDb.isNotEmpty) {
+            final currentCode = _selectedProjectId;
+            final exists = _projectsListDb.any((p) => p['project_code'] == currentCode);
+            if (!exists) {
+              _selectedProjectId = _projectsListDb[0]['project_code'] ?? "";
+              final int dbId = _projectsListDb[0]['id'];
+              _fetchProjectDetail(dbId);
+            } else {
+              final match = _projectsListDb.firstWhere((p) => p['project_code'] == currentCode);
+              _fetchProjectDetail(match['id']);
+            }
+          } else {
+            _selectedProjectId = "";
+            _selectedProjectDetail = null;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching projects: $e");
+      if (mounted) {
+        final errorMessage = ApiErrorHandler.parseError(e);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: const Color(0xFFD97781),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoadingList = false;
+      });
+    }
+  }
+
+  Future<void> _fetchProjectDetail(int id) async {
+    setState(() {
+      _isLoadingDetail = true;
+    });
+    try {
+      final response = await _api.get(ProjectEndpoints.show(id));
+      final body = response.data;
+      if (body['success'] == true) {
+        setState(() {
+          _selectedProjectDetail = body['data'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching project detail: $e");
+      if (mounted) {
+        final errorMessage = ApiErrorHandler.parseError(e);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: const Color(0xFFD97781),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoadingDetail = false;
+      });
+    }
+  }
+
+  int _safeInt(dynamic val) {
+    if (val == null) return 0;
+    if (val is int) return val;
+    if (val is double) return val.toInt();
+    if (val is String) {
+      return double.tryParse(val)?.toInt() ?? int.tryParse(val) ?? 0;
+    }
+    return 0;
+  }
+
+  Map<String, dynamic> _mapDbProjectToMock(Map<String, dynamic> dbProject) {
+    final List<dynamic> dbProducts = dbProject['product_items'] ?? [];
+    final List<Map<String, dynamic>> mappedProducts = dbProducts.map((p) {
+      final List<dynamic> dbVariations = p['variations'] ?? [];
+      final List<String> mappedVariations = dbVariations.map((v) {
+        final optionName = v['option_name'] ?? "";
+        final optionValue = v['option_value'] ?? "";
+        return optionName.isNotEmpty ? "$optionName: $optionValue" : "";
+      }).where((s) => s.isNotEmpty).toList();
+      
+      final List<dynamic> dbFiles = p['files'] ?? [];
+      final List<Map<String, dynamic>> refFiles = [];
+      final List<Map<String, dynamic>> artworkFiles = [];
+      
+      for (var f in dbFiles) {
+        final String fileType = f['file_type'] ?? 'Reference';
+        final String fileName = f['file_name'] ?? 'file';
+        final String filePath = f['file_path'] ?? '';
+        
+        final mapFile = {
+          "name": fileName,
+          "path": filePath,
+          "type": fileType,
+          "icon": fileType == 'Artwork' ? Icons.brush_outlined : Icons.image_outlined,
+          "color": fileType == 'Artwork' ? const Color(0xFFFDE2E4) : const Color(0xFFAEC4FA),
+        };
+        
+        if (fileType == 'Artwork') {
+          artworkFiles.add(mapFile);
+        } else {
+          refFiles.add(mapFile);
+        }
+      }
+
+      return {
+        "name": p['name'] ?? "สินค้าทั่วไป",
+        "qty": "${p['qty'] ?? 0} ${p['unit'] ?? 'หน่วย'}",
+        "target_date": p['target_date'] ?? "-",
+        "specs": p['specs'] ?? "ไม่มีรายละเอียดข้อมูลจำเพาะ",
+        "variations": mappedVariations,
+        "ref_files": refFiles,
+        "artwork_files": artworkFiles,
+      };
+    }).toList();
+
+    final List<dynamic> dbAddRequests = dbProject['additional_requests'] ?? [];
+    final List<Map<String, dynamic>> mappedAddRequests = dbAddRequests.map((r) {
+      return {
+        "desc": r['description'] ?? "",
+        "cost": "+฿${(r['additional_cost'] ?? 0).toString()}",
+      };
+    }).toList();
+
+    final List<dynamic> dbLogs = dbProject['activity_logs'] ?? [];
+    final List<Map<String, dynamic>> mappedLogs = dbLogs.map((l) {
+      return {
+        "time": l['created_at'] != null ? l['created_at'].toString().split('T')[0] : "-",
+        "user": l['user']?['full_name'] ?? "ระบบ",
+        "text": l['description'] ?? "",
+      };
+    }).toList();
+
+    int step = 0;
+    final String status = dbProject['status'] ?? "Inquiry";
+    if (status == "Inquiry") step = 0;
+    else if (status == "Sample") step = 1;
+    else if (status == "Production") step = 2;
+    else if (status == "Shipping") step = 3;
+    else if (status == "Distributing") step = 4;
+    else if (status == "Delivered") step = 5;
+
+    final String creditTerm = dbProject['credit_term'] ?? "Advance";
+    final bool depositPaid = dbProject['deposit_paid'] ?? false;
+    final bool balancePaid = dbProject['balance_paid'] ?? false;
+
+    final bool ocpbOk = dbProject['ocpb_approved'] ?? false;
+    final bool shippingMarkOk = dbProject['shipping_mark_approved'] ?? false;
+
+    double totalVal = 0.0;
+    for (var p in dbProducts) {
+      final double qty = (p['qty'] ?? 0).toDouble();
+      final double price = (p['unit_price'] ?? 0).toDouble();
+      totalVal += qty * price;
+    }
+    String valStr = "฿${(totalVal / 1000000).toStringAsFixed(1)}M";
+    if (totalVal < 1000000) {
+      valStr = "฿${(totalVal / 1000).toStringAsFixed(0)}K";
+    }
+
+    return {
+      "id": dbProject['project_code'] ?? "PPN-${dbProject['id']}",
+      "db_id": dbProject['id'],
+      "customer": dbProject['customer']?['name'] ?? "ลูกค้าทั่วไป",
+      "status": status,
+      "date": dbProject['created_at'] != null ? dbProject['created_at'].toString().split('T')[0] : "-",
+      "due_date": dbProject['target_date'] ?? "-",
+      "step": step,
+      "is_active": status != "Cancelled",
+      "is_paid": balancePaid,
+      "days_left": _safeInt(dbProject['days_left']),
+      "days_in_stage": _safeInt(dbProject['days_in_stage']),
+      "order_value": valStr,
+      "usage_location": dbProject['usage_location'] ?? "ไม่ระบุประเทศปลายทาง",
+      "finance": {
+        "deposit": depositPaid,
+        "balance": balancePaid,
+        "credit_term": creditTerm,
+      },
+      "compliance": {
+        "ocpb": ocpbOk,
+        "shipping_mark": shippingMarkOk,
+      },
+      "products": mappedProducts.isNotEmpty ? mappedProducts : [
         {
-          "name": "กระเป๋าผ้าคอตตอน",
-          "qty": "20,000 ใบ",
-          "target_date": "15 Aug 2026",
-          "specs":
-              "วัสดุผ้าแคนวาส 12 ออนซ์ สีกรมท่า (Pantone 289C) สกรีนโลโก้ Lion สีขาวตรงกลางกระเป๋า ขนาด 5x5 cm ซิป YKK สีขาว",
-          "variations": [
-            "Variation 1: ซิปสีดำ (+฿5/ใบ)",
-            "Variation 2: เคลือบกันน้ำ (+฿15/ใบ)",
-          ],
-          "ref_files": [
-            {
-              "name": "Lion_Bag_Ref_01.jpg",
-              "type": "Image",
-              "icon": Icons.image_outlined,
-              "color": const Color(0xFFAEC4FA),
-            },
-          ],
-          "artwork_files": [
-            {
-              "name": "Lion_Logo_Vector.ai",
-              "type": "Artwork",
-              "icon": Icons.brush_outlined,
-              "color": const Color(0xFFFDE2E4),
-            },
-          ],
-        },
-      ],
-      "additional_requests": [
-        {"desc": "Repackaging (จัดลงกล่องละ 50 ชิ้น)", "cost": "+฿15,000"},
-        {"desc": "ติดสติ๊กเกอร์บาร์โค้ดลาว", "cost": "+฿8,500"},
-      ],
-      "logs": [
-        {
-          "time": "Today, 10:00 AM",
-          "user": "System",
-          "text": "Project stage changed to Production.",
-        },
-      ],
-    },
-    {
-      "id": "PPN-002",
-      "customer": "Tesla Thailand",
-      "status": "Inquiry",
-      "date": "25 May 2026",
-      "due_date": "10 Sep 2026",
-      "step": 0,
-      "is_active": true,
-      "is_paid": false,
-      "days_left": 105,
-      "days_in_stage": 2,
-      "order_value": "฿3.1M",
-      "usage_location": "Global Event (TH, SG, MY)",
-      "finance": {"deposit": false, "balance": false, "credit_term": "Advance"},
-      "compliance": {"ocpb": false, "shipping_mark": false},
-      "products": [
-        {
-          "name": "สายชาร์จ EV พรีเมียม",
-          "qty": "2,000 ชิ้น",
-          "target_date": "10 Sep 2026",
-          "specs": "สายชาร์จ Type 2 to Type 2 หุ้มสายถักสีแดง สกรีนโลโก้ Tesla",
+          "name": "ไม่มีรายการสินค้า",
+          "qty": "0",
+          "target_date": "-",
+          "specs": "-",
           "variations": [],
           "ref_files": [],
           "artwork_files": [],
-        },
+        }
       ],
-    },
-    {
-      "id": "PPN-003",
-      "customer": "Siam Paragon",
-      "status": "Delivered",
-      "date": "10 May 2026",
-      "due_date": "01 Jul 2026",
-      "step": 5,
-      "is_active": true,
-      "is_paid": true,
-      "days_left": 0,
-      "days_in_stage": 5,
-      "order_value": "฿950K",
-      "usage_location": "Siam Paragon BKK",
-      "finance": {"deposit": true, "balance": true, "credit_term": "45 Days"},
-      "compliance": {"ocpb": true, "shipping_mark": true},
-      "products": [
-        {
-          "name": "ถุงกระดาษ Premium",
-          "qty": "50,000 ใบ",
-          "target_date": "01 Jul 2026",
-          "specs": "กระดาษอาร์ตการ์ด 250 แกรม เคลือบด้าน ปั๊มฟอยล์ทองโลโก้",
-          "variations": [],
-          "ref_files": [
-            {
-              "name": "Paragon_Foil_Spec.pdf",
-              "type": "Document",
-              "icon": Icons.picture_as_pdf_outlined,
-              "color": const Color(0xFFEAE4F2),
-            },
-          ],
-          "artwork_files": [],
-        },
-      ],
-    },
-    {
-      "id": "PPN-004",
-      "customer": "Central Group",
-      "status": "Sample",
-      "date": "26 May 2026",
-      "due_date": "01 Oct 2026",
-      "step": 1,
-      "is_active": true,
-      "is_paid": false,
-      "days_left": 125,
-      "days_in_stage": 8,
-      "order_value": "฿500K",
-      "usage_location": "BKK Branches",
-      "finance": {"deposit": true, "balance": false, "credit_term": "30 Days"},
-      "compliance": {"ocpb": false, "shipping_mark": false},
-      "products": [
-        {
-          "name": "ร่มกอล์ฟ 30 นิ้ว",
-          "qty": "1,500 คัน",
-          "target_date": "01 Oct 2026",
-          "specs": "ร่มกอล์ฟสองชั้น กันลม สกรีนโลโก้ Central สีแดง",
-          "variations": [],
-          "ref_files": [],
-          "artwork_files": [],
-        },
-        {
-          "name": "กระบอกน้ำเก็บอุณหภูมิ",
-          "qty": "2,000 ใบ",
-          "target_date": "01 Oct 2026",
-          "specs": "สแตนเลส 304 ยิงเลเซอร์โลโก้",
-          "variations": [],
-          "ref_files": [],
-          "artwork_files": [],
-        },
-      ],
-    },
-    {
-      "id": "PPN-005",
-      "customer": "AIS",
-      "status": "Shipping",
-      "date": "01 May 2026",
-      "due_date": "20 May 2026",
-      "step": 3,
-      "is_active": true,
-      "is_paid": true,
-      "days_left": 14,
-      "days_in_stage": 4,
-      "order_value": "฿2.2M",
-      "usage_location": "Nationwide",
-      "finance": {"deposit": true, "balance": false, "credit_term": "60 Days"},
-      "compliance": {"ocpb": true, "shipping_mark": true},
-      "products": [
-        {
-          "name": "เสื้อโปโลพนักงาน",
-          "qty": "10,000 ตัว",
-          "target_date": "20 May 2026",
-          "specs": "ผ้า TK สีเขียว AIS ปักอกซ้าย",
-          "variations": [],
-          "ref_files": [],
-          "artwork_files": [],
-        },
-      ],
-    },
-  ];
+      "additional_requests": mappedAddRequests,
+      "logs": mappedLogs,
+    };
+  }
 
   Color _getUrgencyColor(int daysLeft, bool isActive) {
     if (!isActive) return const Color(0xFF86868B);
@@ -239,55 +303,12 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     return const Color(0xFF10B981); // Green
   }
 
-  // ==========================================
-  // ฟังก์ชัน Filter และ Sort ข้อมูล
-  // ==========================================
   List<Map<String, dynamic>> _getFilteredProjects() {
-    var result = _projects.where((p) {
-      bool matchesStatus =
-          _selectedStatusFilter == "All Status" ||
-          _selectedStatusFilter == "All Active" ||
-          p['status'] == _selectedStatusFilter;
-      bool matchesSearch = true;
-
-      if (_searchText.isNotEmpty) {
-        String searchLower = _searchText.toLowerCase();
-        bool hasMatchingProduct = (p['products'] as List).any(
-          (prod) => prod['name'].toString().toLowerCase().contains(searchLower),
-        );
-        matchesSearch =
-            p['id'].toString().toLowerCase().contains(searchLower) ||
-            p['customer'].toString().toLowerCase().contains(searchLower) ||
-            p['due_date'].toString().toLowerCase().contains(searchLower) ||
-            hasMatchingProduct;
-      }
-      return matchesStatus && matchesSearch;
-    }).toList();
-
-    if (_selectedSort == "Target Date") {
-      result.sort(
-        (a, b) => (a['days_left'] as int).compareTo(b['days_left'] as int),
-      );
-    } else if (_selectedSort == "Order Value") {
-      result.sort((a, b) => b['order_value'].compareTo(a['order_value']));
-    } else if (_selectedSort == "Days in Stage") {
-      result.sort(
-        (a, b) =>
-            (b['days_in_stage'] as int).compareTo(a['days_in_stage'] as int),
-      );
-    } else if (_selectedSort == "Date Created") {
-      result.sort((a, b) => a['date'].compareTo(b['date']));
-    }
-
-    return result;
+    final List<Map<String, dynamic>> mapped = _projectsListDb.map((p) => _mapDbProjectToMock(p)).toList();
+    return mapped;
   }
 
-  @override
-  void dispose() {
-    _tabsScrollController.dispose();
-    _cardsScrollController.dispose();
-    super.dispose();
-  }
+
 
   void _scroll(ScrollController controller, double offset) {
     controller.animateTo(
@@ -314,7 +335,9 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     }
 
     Map<String, dynamic>? selectedProject;
-    if (filteredProjects.isNotEmpty) {
+    if (_selectedProjectDetail != null) {
+      selectedProject = _mapDbProjectToMock(_selectedProjectDetail!);
+    } else if (filteredProjects.isNotEmpty) {
       selectedProject = filteredProjects.firstWhere(
         (p) => p['id'] == _selectedProjectId,
         orElse: () => filteredProjects[0],
@@ -474,7 +497,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      "Projects (${_projects.length})",
+                      "Projects (${_projectsListDb.length})",
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -570,10 +593,13 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                               (stage == "All Active" &&
                                   _selectedStatusFilter == "All Status");
                           return GestureDetector(
-                            onTap: () => setState(
-                              () => _selectedStatusFilter =
-                                  stage == "All Active" ? "All Status" : stage,
-                            ),
+                            onTap: () {
+                              setState(() {
+                                _selectedStatusFilter =
+                                    stage == "All Active" ? "All Status" : stage;
+                              });
+                              _fetchProjects();
+                            },
                             child: Container(
                               margin: const EdgeInsets.only(right: 8),
                               padding: const EdgeInsets.symmetric(
@@ -696,10 +722,13 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                           );
 
                           return InkWell(
-                            onTap: () => setState(() {
-                              _selectedProjectId = p['id'];
-                              if (_listViewState == 2) _listViewState = 1;
-                            }),
+                            onTap: () {
+                              setState(() {
+                                _selectedProjectId = p['id'];
+                                if (_listViewState == 2) _listViewState = 1;
+                              });
+                              _fetchProjectDetail(p['db_id']);
+                            },
                             borderRadius: BorderRadius.circular(16),
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 8),
@@ -862,7 +891,10 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   // --- 🌟 2 ฟังก์ชันที่เคยหายไป ---
   Widget _buildSearchBar() {
     return TextField(
-      onChanged: (value) => setState(() => _searchText = value),
+      onChanged: (value) {
+        setState(() => _searchText = value);
+        _fetchProjects();
+      },
       decoration: InputDecoration(
         hintText: "Search ID, Customer...",
         prefixIcon: const Icon(
@@ -949,8 +981,10 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                     ),
                   )
                   .toList(),
-          onChanged: (newValue) =>
-              setState(() => _selectedStatusFilter = newValue!),
+          onChanged: (newValue) {
+            setState(() => _selectedStatusFilter = newValue!);
+            _fetchProjects();
+          },
         ),
       ),
     );
@@ -983,7 +1017,10 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                 ),
               )
               .toList(),
-          onChanged: (newValue) => setState(() => _selectedSort = newValue!),
+          onChanged: (newValue) {
+            setState(() => _selectedSort = newValue!);
+            _fetchProjects();
+          },
         ),
       ),
     );
@@ -1004,161 +1041,193 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
         selectedProject['compliance'] ??
         {"ocpb": false, "shipping_mark": false};
 
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool useVerticalHeader = screenWidth < 1200;
+
+    final headerLeft = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (_listViewState == 0)
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: IconButton(
+                  icon: const Icon(
+                    Icons.keyboard_double_arrow_right_rounded,
+                    color: Color(0xFF1D1D1F),
+                    size: 24,
+                  ),
+                  tooltip: "Show Projects List",
+                  onPressed: () => setState(() => _listViewState = 1),
+                ),
+              ),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              decoration: BoxDecoration(
+                color: !isActive
+                    ? const Color(0xFFE2E2E2).withOpacity(0.5)
+                    : const Color(0xFF1D1D1F),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                isActive ? selectedProject['status'] : "Cancelled",
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: !isActive
+                      ? const Color(0xFF1D1D1F)
+                      : Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            if (isActive &&
+                selectedProject['status'] != 'Delivered' &&
+                daysLeft > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD97781).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFD97781)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.timer_outlined,
+                      size: 14,
+                      color: Color(0xFFD97781),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      "Delivery in $daysLeft days",
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFFD97781),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Text(
+          "${selectedProject['id']} : ${selectedProject['customer']}",
+          style: TextStyle(
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            color: isActive
+                ? const Color(0xFF1D1D1F)
+                : const Color(0xFF86868B),
+            letterSpacing: -0.5,
+            decoration: isActive ? null : TextDecoration.lineThrough,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const Icon(
+              Icons.location_on_outlined,
+              size: 16,
+              color: Color(0xFF86868B),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                "Usage Location: $usageLocation",
+                style: const TextStyle(
+                  fontSize: 15,
+                  color: Color(0xFF86868B),
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final headerRight = Wrap(
+      spacing: 16,
+      runSpacing: 16,
+      children: [
+        _buildButton(
+          "Edit",
+          Colors.white,
+          const Color(0xFF1D1D1F),
+          isOutlined: true,
+          icon: Icons.edit_outlined,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CreateProjectScreen(projectId: selectedProject!['db_id']),
+              ),
+            ).then((_) {
+              _fetchProjects();
+            });
+          },
+        ),
+        _buildButton(
+          "Re-order",
+          Colors.white,
+          const Color(0xFF1D1D1F),
+          isOutlined: true,
+          onTap: () {},
+        ),
+        _buildButton(
+          "Create New Project",
+          const Color(0xFF1D1D1F),
+          Colors.white,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const CreateProjectScreen(),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(48.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // --- Header & Actions ---
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      if (_listViewState == 0)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 16),
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.keyboard_double_arrow_right_rounded,
-                              color: Color(0xFF1D1D1F),
-                              size: 24,
-                            ),
-                            tooltip: "Show Projects List",
-                            onPressed: () => setState(() => _listViewState = 1),
-                          ),
-                        ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: !isActive
-                              ? const Color(0xFFE2E2E2).withOpacity(0.5)
-                              : const Color(0xFF1D1D1F),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          isActive ? selectedProject['status'] : "Cancelled",
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: !isActive
-                                ? const Color(0xFF1D1D1F)
-                                : Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      if (isActive &&
-                          selectedProject['status'] != 'Delivered' &&
-                          daysLeft > 0)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFD97781).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFD97781)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.timer_outlined,
-                                size: 14,
-                                color: Color(0xFFD97781),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                "Delivery in $daysLeft days",
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFD97781),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    "${selectedProject['id']} : ${selectedProject['customer']}",
-                    style: TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w700,
-                      color: isActive
-                          ? const Color(0xFF1D1D1F)
-                          : const Color(0xFF86868B),
-                      letterSpacing: -0.5,
-                      decoration: isActive ? null : TextDecoration.lineThrough,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.location_on_outlined,
-                        size: 16,
-                        color: Color(0xFF86868B),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        "Usage Location: $usageLocation",
-                        style: const TextStyle(
-                          fontSize: 15,
-                          color: Color(0xFF86868B),
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  _buildButton(
-                    "Edit",
-                    Colors.white,
-                    const Color(0xFF1D1D1F),
-                    isOutlined: true,
-                    icon: Icons.edit_outlined,
-                    onTap: () {},
-                  ),
-                  const SizedBox(width: 16),
-                  _buildButton(
-                    "Re-order",
-                    Colors.white,
-                    const Color(0xFF1D1D1F),
-                    isOutlined: true,
-                    onTap: () {},
-                  ),
-                  const SizedBox(width: 16),
-                  _buildButton(
-                    "Create New Project",
-                    const Color(0xFF1D1D1F),
-                    Colors.white,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const CreateProjectScreen(),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
+          useVerticalHeader
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    headerLeft,
+                    const SizedBox(height: 24),
+                    headerRight,
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: headerLeft),
+                    const SizedBox(width: 24),
+                    headerRight,
+                  ],
+                ),
           const SizedBox(height: 48),
 
           // --- Section 1: Tracking Pipeline ---
@@ -1552,10 +1621,13 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
             ),
             ...projects.map(
               (p) => InkWell(
-                onTap: () => setState(() {
-                  _selectedProjectId = p['id'];
-                  _listViewState = 1; // เปลี่ยนสถานะเป็นเปิดหน้าต่างรายละเอียด
-                }),
+                onTap: () {
+                  setState(() {
+                    _selectedProjectId = p['id'];
+                    _listViewState = 1;
+                  });
+                  _fetchProjectDetail(p['db_id']);
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
@@ -1660,6 +1732,8 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     bool isActive,
   ) {
     int currentStep = project['step'] ?? 0;
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final bool useVerticalLayout = screenWidth < 1300;
 
     final opSteps = [
       "Inquiry",
@@ -1670,6 +1744,202 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
       "Delivered",
     ];
 
+    Widget stepperWidget = Stack(
+      children: [
+        Positioned(
+          top: 14,
+          left: 40,
+          right: 40,
+          child: Row(
+            children: List.generate(opSteps.length - 1, (index) {
+              bool isCompleted = index < currentStep;
+              return Expanded(
+                child: Container(
+                  height: 2,
+                  color: !isActive
+                      ? const Color(0xFFE2E2E2)
+                      : (isCompleted
+                            ? const Color(0xFF4A9062)
+                            : const Color(0xFFF4F5F7)),
+                ),
+              );
+            }),
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: List.generate(opSteps.length, (index) {
+            bool isCompleted = index < currentStep;
+            bool isCurrent = index == currentStep;
+            Color nodeColor = !isActive
+                ? const Color(0xFFE2E2E2)
+                : (isCompleted
+                      ? const Color(0xFF4A9062)
+                      : (isCurrent
+                            ? const Color(0xFF1D1D1F)
+                            : const Color(0xFFF4F5F7)));
+
+            return GestureDetector(
+              onTap: () {
+                if (!isActive) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Cannot update a cancelled project.",
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                if (index != currentStep) {
+                  _confirmStepChange(
+                    context,
+                    project,
+                    index,
+                    opSteps[index],
+                  );
+                }
+              },
+              child: SizedBox(
+                width: 70,
+                child: Column(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: nodeColor,
+                        shape: BoxShape.circle,
+                        border: (isCurrent && isActive)
+                            ? Border.all(
+                                color: const Color(0xFFAEC4FA),
+                                width: 4,
+                              )
+                            : Border.all(color: Colors.white, width: 2),
+                      ),
+                      child: isCompleted
+                          ? const Icon(
+                              Icons.check,
+                              size: 16,
+                              color: Colors.white,
+                            )
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      opSteps[index],
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: isCurrent
+                            ? FontWeight.bold
+                            : FontWeight.w500,
+                        color: (isCurrent || isCompleted) && isActive
+                            ? const Color(0xFF1D1D1F)
+                            : const Color(0xFF86868B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+
+    Widget detailsWidget = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // === ส่วนการเงินและเทอม ===
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              "Financial & Terms",
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF86868B),
+                letterSpacing: 0.5,
+              ),
+            ),
+            Text(
+              "💳 Credit: ${finance['credit_term'] ?? 'Cash'}",
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF5B7BD5),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildFinanceBadge(
+                "Deposit",
+                finance['deposit'] ?? false,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildFinanceBadge(
+                "Balance",
+                finance['balance'] ?? false,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+
+        // === ส่วนการทำตามข้อกำหนดและโลจิสติกส์ ===
+        const Text(
+          "Compliance & Labels",
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF86868B),
+            letterSpacing: 0.5,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildChecklistBadge(
+                "OCPB (สคบ.)",
+                compliance['ocpb'] ?? false,
+                () => _confirmComplianceUpdate(
+                  context,
+                  project,
+                  'ocpb',
+                  "OCPB (สคบ.)",
+                  !(compliance['ocpb'] ?? false),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _buildChecklistBadge(
+                "Shipping Mark",
+                compliance['shipping_mark'] ?? false,
+                () => _confirmComplianceUpdate(
+                  context,
+                  project,
+                  'shipping_mark',
+                  "Shipping Mark",
+                  !(compliance['shipping_mark'] ?? false),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
       decoration: BoxDecoration(
@@ -1677,222 +1947,36 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.grey.withOpacity(0.15)),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 1. ส่วนของ Stepper (สายพานสถานะการผลิต)
-          Expanded(
-            flex: 6,
-            child: Stack(
+      child: useVerticalLayout
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Positioned(
-                  top: 14,
-                  left: 40,
-                  right: 40,
-                  child: Row(
-                    children: List.generate(opSteps.length - 1, (index) {
-                      bool isCompleted = index < currentStep;
-                      return Expanded(
-                        child: Container(
-                          height: 2,
-                          color: !isActive
-                              ? const Color(0xFFE2E2E2)
-                              : (isCompleted
-                                    ? const Color(0xFF4A9062)
-                                    : const Color(0xFFF4F5F7)),
-                        ),
-                      );
-                    }),
-                  ),
-                ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: List.generate(opSteps.length, (index) {
-                    bool isCompleted = index < currentStep;
-                    bool isCurrent = index == currentStep;
-                    Color nodeColor = !isActive
-                        ? const Color(0xFFE2E2E2)
-                        : (isCompleted
-                              ? const Color(0xFF4A9062)
-                              : (isCurrent
-                                    ? const Color(0xFF1D1D1F)
-                                    : const Color(0xFFF4F5F7)));
-
-                    return GestureDetector(
-                      onTap: () {
-                        if (!isActive) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                "Cannot update a cancelled project.",
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-                        if (index != currentStep) {
-                          _confirmStepChange(
-                            context,
-                            project,
-                            index,
-                            opSteps[index],
-                          );
-                        }
-                      },
-                      child: SizedBox(
-                        width: 80,
-                        child: Column(
-                          children: [
-                            Container(
-                              width: 28,
-                              height: 28,
-                              decoration: BoxDecoration(
-                                color: nodeColor,
-                                shape: BoxShape.circle,
-                                border: (isCurrent && isActive)
-                                    ? Border.all(
-                                        color: const Color(0xFFAEC4FA),
-                                        width: 4,
-                                      )
-                                    : Border.all(color: Colors.white, width: 2),
-                              ),
-                              child: isCompleted
-                                  ? const Icon(
-                                      Icons.check,
-                                      size: 16,
-                                      color: Colors.white,
-                                    )
-                                  : null,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              opSteps[index],
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: isCurrent
-                                    ? FontWeight.bold
-                                    : FontWeight.w500,
-                                color: (isCurrent || isCompleted) && isActive
-                                    ? const Color(0xFF1D1D1F)
-                                    : const Color(0xFF86868B),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }),
-                ),
+                stepperWidget,
+                const SizedBox(height: 32),
+                const Divider(height: 1, color: Color(0xFFF4F5F7)),
+                const SizedBox(height: 32),
+                detailsWidget,
               ],
-            ),
-          ),
-
-          // เส้นคั่นแนวตั้ง
-          Container(
-            width: 1.5,
-            height: 140, // fix height so the divider shows properly
-            color: const Color(0xFFF4F5F7),
-            margin: const EdgeInsets.symmetric(horizontal: 24),
-          ),
-
-          // 2. ส่วนของข้อมูลเพิ่มเติม (Finance, Term, OCPB, Shipping Mark)
-          Expanded(
-            flex: 4,
-            child: Column(
+            )
+          : Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // === ส่วนการเงินและเทอม ===
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      "Financial & Terms",
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF86868B),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    Text(
-                      "💳 Credit: ${finance['credit_term'] ?? 'Cash'}",
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF5B7BD5),
-                      ),
-                    ),
-                  ],
+                Expanded(
+                  flex: 6,
+                  child: stepperWidget,
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildFinanceBadge(
-                        "Deposit",
-                        finance['deposit'] ?? false,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildFinanceBadge(
-                        "Balance",
-                        finance['balance'] ?? false,
-                      ),
-                    ),
-                  ],
+                Container(
+                  width: 1.5,
+                  height: 140,
+                  color: const Color(0xFFF4F5F7),
+                  margin: const EdgeInsets.symmetric(horizontal: 24),
                 ),
-                const SizedBox(height: 24),
-
-                // === ส่วนการทำตามข้อกำหนดและโลจิสติกส์ ===
-                const Text(
-                  "Compliance & Labels",
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF86868B),
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildChecklistBadge(
-                        "OCPB (สคบ.)",
-                        compliance['ocpb'] ?? false,
-                        () => _confirmComplianceUpdate(
-                          context,
-                          project,
-                          'ocpb',
-                          "OCPB (สคบ.)",
-                          !(compliance['ocpb'] ?? false),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _buildChecklistBadge(
-                        "Shipping Mark",
-                        compliance['shipping_mark'] ?? false,
-                        () => _confirmComplianceUpdate(
-                          context,
-                          project,
-                          'shipping_mark',
-                          "Shipping Mark",
-                          !(compliance['shipping_mark'] ?? false),
-                        ),
-                      ),
-                    ),
-                  ],
+                Expanded(
+                  flex: 4,
+                  child: detailsWidget,
                 ),
               ],
             ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -2094,18 +2178,54 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
             ),
           ),
           ElevatedButton(
-            onPressed: () {
-              setState(() {
-                project['step'] = targetStep;
-                project['status'] = targetStepName;
-              });
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text("Status updated to $targetStepName"),
-                  backgroundColor: const Color(0xFF4A9062),
+            onPressed: () async {
+              Navigator.pop(ctx); // Close confirm dialog
+              
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(
+                  child: CircularProgressIndicator(),
                 ),
               );
+
+              try {
+                final response = await _api.patch(
+                  ProjectEndpoints.status(project['db_id']),
+                  data: {"status": targetStepName},
+                );
+
+                Navigator.pop(context); // Close loading spinner
+
+                if (response.data['success'] == true) {
+                  // Fetch updated project details and refresh projects list
+                  await _fetchProjectDetail(project['db_id']);
+                  _fetchProjects();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Status updated to $targetStepName"),
+                      backgroundColor: const Color(0xFF4A9062),
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("อัปเดตสถานะไม่สำเร็จ: ${response.data['error']?['message'] ?? 'ข้อผิดพลาดนิรนาม'}"),
+                      backgroundColor: const Color(0xFFD97781),
+                    ),
+                  );
+                }
+              } catch (e) {
+                Navigator.pop(context); // Close loading spinner
+                debugPrint("Error updating project status: $e");
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("เกิดข้อผิดพลาดในการเชื่อมต่อ: $e"),
+                    backgroundColor: const Color(0xFFD97781),
+                  ),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF5B7BD5),
@@ -2457,10 +2577,13 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
 
     return HoverCardWidget(
       child: InkWell(
-        onTap: () => setState(() {
-          _selectedProjectId = p['id'];
-          _listViewState = 1;
-        }),
+        onTap: () {
+          setState(() {
+            _selectedProjectId = p['id'];
+            _listViewState = 1;
+          });
+          _fetchProjectDetail(p['db_id']);
+        },
         borderRadius: BorderRadius.circular(16),
         child: Container(
           width: width,

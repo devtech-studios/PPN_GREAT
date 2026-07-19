@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'core/api/api_client.dart';
+import 'core/storage/token_storage.dart';
 import 'modules/auth/login_screen.dart';
+import 'shared/layouts/main_layout.dart';
 
 class PPNGreatApp extends StatelessWidget {
   const PPNGreatApp({super.key});
@@ -10,6 +13,7 @@ class PPNGreatApp extends StatelessWidget {
     return MaterialApp(
       title: 'PPN Great ERP',
       debugShowCheckedModeBanner: false,
+      navigatorKey: ApiClient.navigatorKey,
       theme: ThemeData(
         scaffoldBackgroundColor: const Color(0xFFF7F9FC),
         primaryColor: const Color(0xFF5B7BD5),
@@ -19,18 +23,92 @@ class PPNGreatApp extends StatelessWidget {
           secondary: const Color(0xFF4A9062),
         ),
       ),
-      home: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 850) {
-            return const MobileOwnerScreen();
-          } else {
-            return const LoginScreen();
-          }
-        },
+      routes: {
+        '/login': (context) => const LoginScreen(),
+      },
+      home: const _SplashScreen(),
+    );
+  }
+}
+
+/// Splash Screen — เช็ค Token เมื่อเปิดแอป
+/// ถ้ามี Token → ไป Dashboard ทันที (ไม่ต้อง login ใหม่)
+/// ถ้าไม่มี Token → ไป Login
+class _SplashScreen extends StatefulWidget {
+  const _SplashScreen();
+
+  @override
+  State<_SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<_SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    // รอ frame แรก render ก่อน
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    final hasToken = await TokenStorage.hasToken();
+
+    if (!mounted) return;
+
+    if (hasToken) {
+      // มี Token → ไป Dashboard
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const MainLayout()),
+      );
+    } else {
+      // ไม่มี Token → ไป Login
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF7F9FC),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              "PPN GREAT",
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 2,
+                color: Color(0xFF1D1D1F),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              "Import Operation Platform",
+              style: TextStyle(fontSize: 14, color: Color(0xFF86868B)),
+            ),
+            const SizedBox(height: 32),
+            const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Color(0xFF5B7BD5),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
+
 
 // ============================================================================
 // MOBILE OWNER SCREEN

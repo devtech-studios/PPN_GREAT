@@ -1,0 +1,30 @@
+{
+  "name": "ppn-great-e2e",
+  "version": "1.0.0",
+  "description": "Playwright E2E tests for PPN GREAT system",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:ui": "npx playwright test --ui",
+    "test:headed": "npx playwright test --headed",
+    "test:login": "npx playwright test tests/01-login.spec.ts",
+    "test:nav": "npx playwright test tests/02-navigation.spec.ts",
+    "test:customers": "npx playwright test tests/03-customers.spec.ts",
+    "test:projects": "npx playwright test tests/04-projects.spec.ts",
+    "test:samples": "npx playwright test tests/06-samples.spec.ts",
+    "test:artwork": "npx playwright test tests/07-artwork.spec.ts",
+    "test:dashboard": "npx playwright test tests/08-dashboard.spec.ts",
+    "test:suppliers": "npx playwright test tests/09-suppliers.spec.ts",
+    "test:finance": "npx playwright test tests/10-finance-docs.spec.ts",
+    "test:payments": "npx playwright test tests/11-finance-payments.spec.ts",
+    "test:containers": "npx playwright test tests/12-containers.spec.ts",
+    "test:inventory": "npx playwright test tests/13-inventory.spec.ts",
+    "test:delivery": "npx playwright test tests/14-delivery.spec.ts",
+    "test:reports": "npx playwright test tests/15-reports.spec.ts",
+    "test:supplier-portal": "npx playwright test tests/16-supplier-portal.spec.ts",
+    "test:full-flow": "npx playwright test tests/99-full-flow.spec.ts",
+    "report": "npx playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}

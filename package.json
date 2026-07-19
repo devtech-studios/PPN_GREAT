@@ -1,0 +1,36 @@
+{
+  "name": "ppn-great-e2e",
+  "private": true,
+  "scripts": {
+    "build:web": "D:\\flutter\\bin\\flutter.bat build web",
+    "build:web:realistic": "D:\\flutter\\bin\\flutter.bat build web --dart-define=PPN_API_BASE_URL=http://127.0.0.1:8001/api",
+    "serve:web": "http-server build/web -p 4173 -c-1",
+    "e2e:install": "playwright install chromium",
+    "e2e:list": "playwright test --list",
+    "e2e:smoke": "playwright test --grep \"@smoke\"",
+    "e2e:regression": "playwright test --grep-invert \"@live-mutation\"",
+    "e2e:live": "playwright test --grep \"@live-mutation\" --workers=1",
+    "e2e": "playwright test",
+    "e2e:video": "playwright test --config=playwright.video.config.ts --grep-invert \"@live-mutation\"",
+    "e2e:video:smoke": "playwright test --config=playwright.video.config.ts --grep \"@smoke\"",
+    "e2e:video:report": "playwright show-report playwright-report-video",
+    "e2e:realistic:list": "playwright test --config=playwright.realistic.config.ts --list",
+    "e2e:realistic:video": "playwright test --config=playwright.realistic.config.ts",
+    "e2e:realistic:report": "playwright show-report playwright-report-realistic",
+    "e2e:adversarial:v2:list": "playwright test --config=playwright.adversarial-v2.config.ts --list",
+    "e2e:adversarial:v2": "playwright test --config=playwright.adversarial-v2.config.ts",
+    "e2e:adversarial:v2:report": "playwright show-report playwright-report-adversarial-v2-all",
+    "e2e:adversarial:v2:report:auth": "playwright show-report playwright-report-adversarial-v2-auth",
+    "e2e:adversarial:v2:report:network": "playwright show-report playwright-report-adversarial-v2-network",
+    "e2e:adversarial:v2:report:long": "playwright show-report playwright-report-adversarial-v2-long",
+    "e2e:ui": "playwright test --ui",
+    "e2e:debug": "playwright test --debug",
+    "e2e:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1",
+    "@types/node": "^26.1.1",
+    "http-server": "14.1.1",
+    "typescript": "^5.9.3"
+  }
+}

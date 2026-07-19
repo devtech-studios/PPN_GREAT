@@ -1,5 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
+import '../../core/api/api_client.dart';
+import '../../core/api/api_endpoints.dart';
+import '../../core/api/api_error_handler.dart';
 import '../customers/create_customer_screen.dart';
 
 class MouseDraggableScrollBehavior extends MaterialScrollBehavior {
@@ -11,7 +15,8 @@ class MouseDraggableScrollBehavior extends MaterialScrollBehavior {
 }
 
 class CreateProjectScreen extends StatefulWidget {
-  const CreateProjectScreen({super.key});
+  final int? projectId;
+  const CreateProjectScreen({super.key, this.projectId});
 
   @override
   State<CreateProjectScreen> createState() => _CreateProjectScreenState();
@@ -19,15 +24,44 @@ class CreateProjectScreen extends StatefulWidget {
 
 class _CreateProjectScreenState extends State<CreateProjectScreen> {
   // Global Project State
+  // API client
+  final ApiClient _api = ApiClient();
+  final TextEditingController _targetDateController = TextEditingController();
+  final TextEditingController _budgetController = TextEditingController();
+  final TextEditingController _specsController = TextEditingController();
+  bool _isLoadingCustomers = false;
+  List<dynamic> _dbCustomers = [];
+  String _customerSearchQuery = "";
+
+  bool _isEditingMode = false;
+  bool _isLoadingProjectDetails = false;
+  final List<int> _deletedProductIds = [];
+  Map<String, dynamic>? _selectedProjectDetail;
+
+  @override
+  void dispose() {
+    _targetDateController.dispose();
+    _budgetController.dispose();
+    _specsController.dispose();
+    super.dispose();
+  }
+
+  // Global Project State
   int _selectedPriority = 0;
   bool _isRepeatOrder = false;
 
-  // 🌟 ค่าเริ่มต้นเป็น null (ไม่ Pre-select ลูกค้า)
+  // Selected Customer details
+  int? _selectedCustomerId;
   String? _selectedCustomerName;
-  String? _selectedContactPerson;
+  
+  // Selected Contact Person details
+  int? _selectedContactPersonId;
+  String? _selectedContactPersonName;
 
   // Project Details
   String _projectTargetDate = "";
+  String _overallBudget = "";
+  String _projectSpecs = "";
 
   // Items State
   final List<Map<String, dynamic>> _productItems = [
@@ -41,33 +75,198 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   ];
   int _nextItemId = 2;
 
-  // Mock Data: ลูกค้าและผู้ติดต่อ
-  final List<Map<String, dynamic>> _customers = [
-    {
-      "name": "Lion (Thailand)",
-      "type": "เจ้าใหญ่",
-      "last_project": "กระเป๋าผ้าคอตตอน • 2 months ago",
-      "contacts": ["K. Somchai (MKT)", "K. Ann (Purchasing)"],
-    },
-    {
-      "name": "Tesla Thailand",
-      "type": "เจ้าใหญ่",
-      "last_project": "สายชาร์จ EV • 15 days ago",
-      "contacts": ["K. Mike (Event)"],
-    },
-    {
-      "name": "ร้านเจ๊จู นำเข้า",
-      "type": "เจ้าเล็ก",
-      "last_project": "เครื่องครัว • 1 year ago",
-      "contacts": ["เจ๊จู"],
-    },
-    {
-      "name": "Siam Paragon",
-      "type": "เจ้าใหญ่",
-      "last_project": "ถุงกระดาษ Premium • 5 months ago",
-      "contacts": ["K.ploy (CRM)", "K. Nut (MKT)"],
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchCustomers();
+    if (widget.projectId != null) {
+      _isEditingMode = true;
+      _fetchProjectDetails(widget.projectId!);
+    }
+  }
+
+  Future<void> _fetchProjectDetails(int projectId) async {
+    setState(() {
+      _isLoadingProjectDetails = true;
+    });
+    try {
+      final response = await _api.get(ProjectEndpoints.show(projectId));
+      final body = response.data;
+      if (body['success'] == true) {
+        final p = body['data'];
+        setState(() {
+          _selectedProjectDetail = p;
+          _selectedCustomerId = p['customer_id'];
+          _selectedCustomerName = p['customer']?['name'];
+          _selectedContactPersonId = p['contact_person_id'];
+          _selectedContactPersonName = p['contact_person']?['name'];
+          _selectedPriority = p['priority'] ?? 0;
+          _isRepeatOrder = p['is_repeat_order'] == 1 || p['is_repeat_order'] == true;
+          
+          if (p['target_date'] != null) {
+            final String rawDate = p['target_date'].toString();
+            final parts = rawDate.split('T')[0].split('-');
+            if (parts.length == 3) {
+              _projectTargetDate = "${parts[2]}/${parts[1]}/${parts[0]}";
+              _targetDateController.text = _projectTargetDate;
+            }
+          }
+          
+          _overallBudget = p['order_value']?.toString() ?? "";
+          _budgetController.text = _overallBudget;
+          _projectSpecs = p['specs'] ?? "";
+          _specsController.text = _projectSpecs;
+          
+          // Seed product items
+          final List<dynamic> dbProducts = p['product_items'] ?? [];
+          _productItems.clear();
+          if (dbProducts.isEmpty) {
+            _productItems.add({
+              "id": 1,
+              "type": "",
+              "quantities": [""],
+              "custom_target_date": "",
+              "specs": "",
+            });
+            _nextItemId = 2;
+          } else {
+            int tempId = 1;
+            for (var prod in dbProducts) {
+              String customTargetDate = "";
+              if (prod['target_date'] != null) {
+                final parts = prod['target_date'].toString().split('T')[0].split('-');
+                if (parts.length == 3) {
+                  customTargetDate = "${parts[2]}/${parts[1]}/${parts[0]}";
+                }
+              }
+
+              _productItems.add({
+                "db_id": prod['id'],
+                "id": tempId++,
+                "type": prod['name'] ?? "",
+                "quantities": [prod['qty']?.toString() ?? ""],
+                "custom_target_date": customTargetDate,
+                "specs": prod['specs'] ?? "",
+              });
+            }
+            _nextItemId = tempId;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching project details: $e");
+      if (mounted) {
+        final errorMessage = ApiErrorHandler.parseError(e);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("ดึงรายละเอียดโปรเจกต์ล้มเหลว: $errorMessage"),
+            backgroundColor: const Color(0xFFD97781),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoadingProjectDetails = false;
+      });
+    }
+  }
+
+  Future<void> _fetchCustomers() async {
+    setState(() {
+      _isLoadingCustomers = true;
+    });
+    try {
+      final response = await _api.get(CustomerEndpoints.index, queryParameters: {
+        if (_customerSearchQuery.isNotEmpty) 'search': _customerSearchQuery,
+      });
+      final body = response.data;
+      if (body['success'] == true) {
+        setState(() {
+          _dbCustomers = body['data'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching customers: $e");
+      if (mounted) {
+        final errorMessage = ApiErrorHandler.parseError(e);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: const Color(0xFFD97781),
+          ),
+        );
+      }
+    } finally {
+      setState(() {
+        _isLoadingCustomers = false;
+      });
+    }
+  }
+
+  Future<void> _selectProjectTargetDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 30)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF5B7BD5),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF1D1D1F),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF5B7BD5),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      final String formatted = "${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}";
+      setState(() {
+        _projectTargetDate = formatted;
+        _targetDateController.text = formatted;
+      });
+    }
+  }
+
+  Future<void> _selectProductTargetDate(BuildContext context, Map<String, dynamic> item) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 30)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF5B7BD5),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF1D1D1F),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF5B7BD5),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      final String formatted = "${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}";
+      setState(() {
+        item['custom_target_date'] = formatted;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -97,9 +296,11 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            "Create New Project",
-                            style: TextStyle(
+                          Text(
+                            _isEditingMode
+                                ? "Edit Project: ${_selectedProjectDetail?['project_code'] ?? ''}"
+                                : "Create New Project",
+                            style: const TextStyle(
                               fontSize: 32,
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF1D1D1F),
@@ -133,7 +334,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                           ),
                           const SizedBox(width: 16),
                           _buildButton(
-                            "Create Project",
+                            _isEditingMode ? "Save Changes" : "Create Project",
                             const Color(0xFF1D1D1F),
                             Colors.white,
                             onTap: () => _confirmCreateDialog(context),
@@ -169,7 +370,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                             // 🌟 ย้าย Contact Person มาไว้ตรงนี้
                             Expanded(
                               flex: 2,
-                              child: _selectedCustomerName == null
+                              child: _selectedCustomerId == null
                                   ? _buildDropdownField(
                                       "Contact Person in charge *",
                                       "โปรดเลือกลูกค้าด้านซ้ายก่อน",
@@ -177,21 +378,34 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                                       null,
                                       null,
                                     )
-                                  : _buildDropdownField(
-                                      "Contact Person in charge *",
-                                      "เลือกผู้รับผิดชอบ...",
-                                      (_customers.firstWhere(
-                                                (c) =>
-                                                    c['name'] ==
-                                                    _selectedCustomerName,
-                                              )['contacts']
-                                              as List)
-                                          .cast<String>(),
-                                      _selectedContactPerson,
-                                      (val) => setState(
-                                        () => _selectedContactPerson = val,
-                                      ),
-                                    ),
+                                  : () {
+                                      final selectedCust = _dbCustomers.firstWhere(
+                                        (c) => c['id'] == _selectedCustomerId,
+                                        orElse: () => null,
+                                      );
+                                      final contactsList = selectedCust != null
+                                          ? (selectedCust['contacts'] as List? ?? [])
+                                          : [];
+                                      final contactNames = contactsList
+                                          .map((cp) => cp['name'].toString())
+                                          .toList();
+                                      return _buildDropdownField(
+                                        "Contact Person in charge *",
+                                        "เลือกผู้รับผิดชอบ...",
+                                        contactNames,
+                                        _selectedContactPersonName,
+                                        (val) {
+                                          final matchedCp = contactsList.firstWhere(
+                                            (cp) => cp['name'].toString() == val,
+                                            orElse: () => null,
+                                          );
+                                          setState(() {
+                                            _selectedContactPersonName = val;
+                                            _selectedContactPersonId = matchedCp != null ? matchedCp['id'] : null;
+                                          });
+                                        },
+                                      );
+                                    }(),
                             ),
                             const SizedBox(width: 24),
                             Expanded(
@@ -200,7 +414,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                                 "Project Target Date *",
                                 "DD/MM/YYYY",
                                 icon: Icons.calendar_today,
-                                onChanged: (val) => _projectTargetDate = val,
+                                controller: _targetDateController,
+                                readOnly: true,
+                                onTap: () => _selectProjectTargetDate(context),
                               ),
                             ),
                             const SizedBox(width: 24),
@@ -210,6 +426,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                                 "Overall Budget (THB)",
                                 "งบประมาณรวม (ถ้ามี)",
                                 isNumber: true,
+                                controller: _budgetController,
+                                onChanged: (val) => _overallBudget = val,
                               ),
                             ),
                           ],
@@ -332,6 +550,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                                 "Project Specs & Requirements",
                                 "ระบุธีมงาน, แคมเปญ หรือความต้องการภาพรวมของโปรเจกต์...",
                                 maxLines: 2,
+                                controller: _specsController,
+                                onChanged: (val) => _projectSpecs = val,
                               ),
                             ),
                           ],
@@ -445,6 +665,12 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: TextField(
+              onChanged: (val) {
+                setState(() {
+                  _customerSearchQuery = val;
+                });
+                _fetchCustomers();
+              },
               decoration: InputDecoration(
                 hintText: "ค้นหาลูกค้า...",
                 prefixIcon: const Icon(Icons.search, size: 20),
@@ -502,59 +728,73 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
           ),
           const Divider(height: 32, color: Color(0xFFF4F5F7)),
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              itemCount: _customers.length,
-              itemBuilder: (context, index) {
-                final c = _customers[index];
-                final isSelected = _selectedCustomerName == c['name'];
-
-                return InkWell(
-                  onTap: () => setState(() {
-                    _selectedCustomerName = c['name'];
-                    _selectedContactPerson =
-                        null; // รีเซ็ตผู้ติดต่อเมื่อเปลี่ยนบริษัท
-                  }),
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFFAEC4FA).withOpacity(0.15)
-                          : Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected
-                            ? const Color(0xFFAEC4FA)
-                            : Colors.grey.withOpacity(0.15),
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          c['name'],
+            child: _isLoadingCustomers
+                ? const Center(child: CircularProgressIndicator())
+                : (_dbCustomers.isEmpty
+                    ? const Center(
+                        child: Text(
+                          "ไม่พบรายชื่อลูกค้า",
                           style: TextStyle(
-                            fontWeight: isSelected
-                                ? FontWeight.bold
-                                : FontWeight.w600,
-                            color: const Color(0xFF1D1D1F),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "Last: ${c['last_project']}",
-                          style: const TextStyle(
-                            fontSize: 12,
                             color: Color(0xFF86868B),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _dbCustomers.length,
+                        itemBuilder: (context, index) {
+                          final c = _dbCustomers[index];
+                          final isSelected = _selectedCustomerId == c['id'];
+
+                          return InkWell(
+                            onTap: () => setState(() {
+                              _selectedCustomerId = c['id'];
+                              _selectedCustomerName = c['name'];
+                              _selectedContactPersonId = null;
+                              _selectedContactPersonName = null;
+                            }),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? const Color(0xFFAEC4FA).withValues(alpha: 0.15)
+                                    : Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFFAEC4FA)
+                                      : Colors.grey.withValues(alpha: 0.15),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    c['name'],
+                                    style: TextStyle(
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.w600,
+                                      color: const Color(0xFF1D1D1F),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "Tax ID: ${c['tax_id'] ?? '-'}",
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF86868B),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      )),
           ),
         ],
       ),
@@ -564,6 +804,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
   // 3. Block สินค้าแต่ละชิ้น
   Widget _buildProductItemBlock(int index, Map<String, dynamic> item) {
     return Container(
+      key: ValueKey("prod_${item['id']}_${item['db_id'] ?? 'new'}"),
       margin: const EdgeInsets.only(bottom: 24),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -654,6 +895,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                           ),
                           const SizedBox(height: 8),
                           TextFormField(
+                            initialValue: item['type'],
+                            onChanged: (val) => item['type'] = val,
                             decoration: InputDecoration(
                               hintText: "Search or type custom product...",
                               suffixIcon: const Icon(
@@ -694,6 +937,8 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                                   Expanded(
                                     child: TextFormField(
                                       keyboardType: TextInputType.number,
+                                      initialValue: qEntry.value.toString(),
+                                      onChanged: (val) => item['quantities'][qEntry.key] = val,
                                       decoration: InputDecoration(
                                         hintText: "e.g. 1000",
                                         filled: true,
@@ -760,10 +1005,7 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                           const SizedBox(height: 8),
                           item['custom_target_date'] == ""
                               ? InkWell(
-                                  onTap: () => setState(
-                                    () => item['custom_target_date'] =
-                                        "DD/MM/YYYY",
-                                  ),
+                                  onTap: () => _selectProductTargetDate(context, item),
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 14,
@@ -786,24 +1028,34 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                                     ),
                                   ),
                                 )
-                              : TextFormField(
-                                  decoration: InputDecoration(
-                                    hintText: "DD/MM/YYYY",
-                                    suffixIcon: InkWell(
-                                      onTap: () => setState(
-                                        () => item['custom_target_date'] = "",
-                                      ),
-                                      child: const Icon(Icons.close, size: 16),
-                                    ),
-                                    filled: true,
-                                    fillColor: const Color(0xFFF4F5F7),
-                                    contentPadding: const EdgeInsets.symmetric(
+                              : InkWell(
+                                  onTap: () => _selectProductTargetDate(context, item),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
                                       horizontal: 16,
                                       vertical: 14,
                                     ),
-                                    border: OutlineInputBorder(
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF4F5F7),
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide.none,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          item['custom_target_date'],
+                                          style: const TextStyle(
+                                            color: Color(0xFF1D1D1F),
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        InkWell(
+                                          onTap: () => setState(
+                                            () => item['custom_target_date'] = "",
+                                          ),
+                                          child: const Icon(Icons.close, size: 16, color: Color(0xFF86868B)),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -832,10 +1084,12 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                           ),
                           const SizedBox(height: 8),
                           TextFormField(
+                            initialValue: item['specs'],
+                            onChanged: (val) => item['specs'] = val,
                             maxLines: 5,
                             decoration: InputDecoration(
                               hintText:
-                                  "ระบุวัสดุ สี ขนาด จุดสกรีน... (หากมีหลายลายใน 1 สินค้า โปรดระบุจำนวนของแต่ละลายที่นี่)",
+                                  "ระบุวัสดุ สี ขนาด จุดสกรีน... (หากมีหลายลาย in 1 สินค้า โปรดระบุจำนวนของแต่ละลายที่นี่)",
                               filled: true,
                               fillColor: const Color(0xFFF4F5F7),
                               border: OutlineInputBorder(
@@ -970,7 +1224,11 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFD97781),
             ),
-            onPressed: () {
+             onPressed: () {
+              final matched = _productItems.firstWhere((p) => p['id'] == id, orElse: () => {});
+              if (matched.containsKey('db_id')) {
+                _deletedProductIds.add(matched['db_id'] as int);
+              }
               setState(() => _productItems.removeWhere((p) => p['id'] == id));
               Navigator.pop(ctx);
             },
@@ -1012,8 +1270,195 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     );
   }
 
+  String? _parseDateToDb(String input) {
+    if (input.trim().isEmpty) return null;
+    final trimmed = input.trim();
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(trimmed)) {
+      return trimmed;
+    }
+    final parts = trimmed.split('/');
+    if (parts.length == 3) {
+      final day = parts[0].padLeft(2, '0');
+      final month = parts[1].padLeft(2, '0');
+      final year = parts[2];
+      return '$year-$month-$day';
+    }
+    return null;
+  }
+
+  Future<void> _saveProject(BuildContext context) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final projectPayload = {
+        "customer_id": _selectedCustomerId,
+        "contact_person_id": _selectedContactPersonId,
+        "priority": _selectedPriority,
+        "is_repeat_order": _isRepeatOrder,
+        "target_date": _parseDateToDb(_projectTargetDate),
+        "order_value": _overallBudget.isNotEmpty ? double.tryParse(_overallBudget) : null,
+        "usage_location": "Thailand",
+        "credit_term": "30 Days",
+      };
+
+      final response = await _api.post(ProjectEndpoints.store, data: projectPayload);
+      final body = response.data;
+
+      if (body['success'] == true) {
+        final int projectId = body['data']['id'];
+
+        for (var item in _productItems) {
+          final String name = item['type'] ?? "";
+          if (name.trim().isEmpty) continue;
+
+          final List<dynamic> qtys = item['quantities'] ?? [];
+          for (var qtyStr in qtys) {
+            final int? qty = int.tryParse(qtyStr.toString());
+            if (qty == null) continue;
+
+            final String customTargetDate = item['custom_target_date'] ?? "";
+            final String? parsedProdTargetDate = (customTargetDate.isNotEmpty && customTargetDate != "DD/MM/YYYY") 
+                ? _parseDateToDb(customTargetDate) 
+                : _parseDateToDb(_projectTargetDate);
+
+            final productPayload = {
+              "name": name,
+              "qty": qty,
+              "specs": item['specs'] ?? "",
+              "target_date": parsedProdTargetDate,
+            };
+
+            await _api.post(ProjectEndpoints.products(projectId), data: productPayload);
+          }
+        }
+
+        Navigator.pop(context); // Close loading spinner
+        _showSuccessPopup(context);
+      } else {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("สร้างโปรเจกต์ไม่สำเร็จ: ${body['error']?['message'] ?? 'ข้อผิดพลาดนิรนาม'}"),
+            backgroundColor: const Color(0xFFD97781),
+          ),
+        );
+      }
+    } catch (e) {
+      Navigator.pop(context);
+      debugPrint("Error saving project: $e");
+      
+      final errorMsg = ApiErrorHandler.parseError(e);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg),
+          backgroundColor: const Color(0xFFD97781),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    }
+  }
+
+  Future<void> _updateProject(BuildContext context) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    try {
+      final int projectId = widget.projectId!;
+      final projectPayload = {
+        "contact_person_id": _selectedContactPersonId,
+        "priority": _selectedPriority,
+        "is_repeat_order": _isRepeatOrder,
+        "target_date": _parseDateToDb(_projectTargetDate),
+        "order_value": _overallBudget.isNotEmpty ? double.tryParse(_overallBudget) : null,
+        "usage_location": _selectedProjectDetail?['usage_location'] ?? "Thailand",
+        "credit_term": _selectedProjectDetail?['credit_term'] ?? "30 Days",
+      };
+
+      // 1. Update project details
+      final response = await _api.put(ProjectEndpoints.update(projectId), data: projectPayload);
+      final body = response.data;
+
+      if (body['success'] == true) {
+        // 2. Delete removed products
+        for (var pid in _deletedProductIds) {
+          try {
+            await _api.delete(ProjectEndpoints.deleteProduct(projectId, pid));
+          } catch (e) {
+            debugPrint("Error deleting product $pid: $e");
+          }
+        }
+        _deletedProductIds.clear();
+
+        // 3. Update or Create product items
+        for (var item in _productItems) {
+          final String name = item['type'] ?? "";
+          if (name.trim().isEmpty) continue;
+
+          final List<dynamic> qtys = item['quantities'] ?? [];
+          for (var qtyStr in qtys) {
+            final int? qty = int.tryParse(qtyStr.toString());
+            if (qty == null) continue;
+
+            final String customTargetDate = item['custom_target_date'] ?? "";
+            final String? parsedProdTargetDate = (customTargetDate.isNotEmpty && customTargetDate != "DD/MM/YYYY") 
+                ? _parseDateToDb(customTargetDate) 
+                : _parseDateToDb(_projectTargetDate);
+
+            final productPayload = {
+              "name": name,
+              "qty": qty,
+              "specs": item['specs'] ?? "",
+              "target_date": parsedProdTargetDate,
+            };
+
+            if (item.containsKey('db_id')) {
+              final int pid = item['db_id'];
+              await _api.put(ProjectEndpoints.updateProduct(projectId, pid), data: productPayload);
+            } else {
+              await _api.post(ProjectEndpoints.products(projectId), data: productPayload);
+            }
+          }
+        }
+
+        Navigator.pop(context); // Close loading spinner
+        _showSuccessPopup(context);
+      } else {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("แก้ไขโปรเจกต์ไม่สำเร็จ: ${body['error']?['message'] ?? 'ข้อผิดพลาดนิรนาม'}"),
+            backgroundColor: const Color(0xFFD97781),
+          ),
+        );
+      }
+    } catch (e) {
+      Navigator.pop(context);
+      debugPrint("Error updating project: $e");
+      
+      final errorMsg = ApiErrorHandler.parseError(e);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg),
+          backgroundColor: const Color(0xFFD97781),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    }
+  }
+
   void _confirmCreateDialog(BuildContext context) {
-    if (_selectedCustomerName == null || _selectedContactPerson == null) {
+    if (_selectedCustomerId == null || _selectedContactPersonName == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("กรุณาเลือกลูกค้าและผู้ติดต่อให้ครบถ้วน"),
@@ -1026,9 +1471,11 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Confirm Create Project"),
-        content: const Text(
-          "ตรวจสอบข้อมูลครบถ้วนและต้องการสร้างโปรเจกต์ใหม่ใช่หรือไม่?",
+        title: Text(_isEditingMode ? "Confirm Edit Project" : "Confirm Create Project"),
+        content: Text(
+          _isEditingMode 
+              ? "ตรวจสอบข้อมูลครบถ้วนและต้องการบันทึกการแก้ไขใช่หรือไม่?" 
+              : "ตรวจสอบข้อมูลครบถ้วนและต้องการสร้างโปรเจกต์ใหม่ใช่หรือไม่?",
         ),
         actions: [
           TextButton(
@@ -1041,11 +1488,15 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
             ),
             onPressed: () {
               Navigator.pop(ctx);
-              _showSuccessPopup(context);
+              if (_isEditingMode) {
+                _updateProject(context);
+              } else {
+                _saveProject(context);
+              }
             },
-            child: const Text(
-              "Confirm & Create",
-              style: TextStyle(color: Colors.white),
+            child: Text(
+              _isEditingMode ? "Confirm & Save" : "Confirm & Create",
+              style: const TextStyle(color: Colors.white),
             ),
           ),
         ],
@@ -1069,14 +1520,16 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
                 color: Color(0xFF4A9062),
               ),
               const SizedBox(height: 16),
-              const Text(
-                "Project Created Successfully!",
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              Text(
+                _isEditingMode ? "Project Updated Successfully!" : "Project Created Successfully!",
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              const Text(
-                "รหัสโปรเจกต์ PRJ-055 ถูกสร้างเรียบร้อยแล้ว",
-                style: TextStyle(color: Color(0xFF86868B)),
+              Text(
+                _isEditingMode 
+                    ? "แก้ไขโปรเจกต์ ${_selectedProjectDetail?['project_code'] ?? ''} เรียบร้อยแล้ว"
+                    : "รหัสโปรเจกต์ใหม่ ถูกสร้างเรียบร้อยแล้ว",
+                style: const TextStyle(color: Color(0xFF86868B)),
               ),
               const SizedBox(height: 32),
               SizedBox(
@@ -1158,6 +1611,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
     bool isNumber = false,
     IconData? icon,
     Function(String)? onChanged,
+    TextEditingController? controller,
+    VoidCallback? onTap,
+    bool readOnly = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1172,6 +1628,9 @@ class _CreateProjectScreenState extends State<CreateProjectScreen> {
         ),
         const SizedBox(height: 8),
         TextFormField(
+          controller: controller,
+          readOnly: readOnly,
+          onTap: onTap,
           maxLines: maxLines,
           keyboardType: isNumber ? TextInputType.number : TextInputType.text,
           onChanged: onChanged,

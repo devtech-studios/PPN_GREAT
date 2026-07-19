@@ -1,5 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../core/api/api_client.dart';
+import '../../core/api/api_endpoints.dart';
 
 class MouseDraggableScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -17,84 +19,14 @@ class SamplesScreen extends StatefulWidget {
 }
 
 class _SamplesScreenState extends State<SamplesScreen> {
-  String _searchText = "";
-  String _selectedProjectId = "PRJ-008";
+  final ApiClient _api = ApiClient();
+  bool _isLoadingProjects = false;
+  bool _isLoadingSamples = false;
+  List<dynamic> _projectsDb = [];
+  List<dynamic> _dbSamples = [];
 
-  // ==========================================
-  // Mock Data: 🌟 เพิ่ม attempt (ครั้งที่) และ sent_date (วันที่ส่ง)
-  // ==========================================
-  final List<Map<String, dynamic>> _sampleProjects = [
-    {
-      "id": "PRJ-008",
-      "customer": "AIS",
-      "status": "In Progress",
-      "products": [
-        {
-          "name": "ร่มพับ 2 ตอน พรีเมียม",
-          "qty": "3,000 คัน",
-          "specs": "ร่มสีเขียว AIS สกรีนอุ่นใจ 2 จุด (กางออกขนาด 21 นิ้ว)",
-          "client_samples": [
-            {
-              "id": "CS-001",
-              "attempt": 1, // 🌟 ส่งครั้งที่ 1
-              "type": "Pre-production Sample (PPS)",
-              "origin": "China",
-              "supplier": "Guangzhou Umbrellas",
-              "status": "Rejected (Need Revision)",
-              "sent_date": "20 May 2026", // 🌟 วันที่ส่ง
-              "china_tracking": "SF8839201948",
-              "local_courier": "Kerry Express",
-              "local_tracking": "KERRY-12345",
-              "feedback":
-                  "สีโลโก้สกรีนเพี้ยน (อ่อนไป) ลูกค้าขอแก้สีให้ตรง Pantone 347C และส่งมาให้ดูใหม่",
-            },
-            {
-              "id": "CS-002",
-              "attempt": 2, // 🌟 ส่งครั้งที่ 2
-              "type": "Material Swatch (ชิ้นผ้า)",
-              "origin": "In-Stock",
-              "supplier": "-",
-              "status": "Approved by Client",
-              "sent_date": "28 May 2026", // 🌟 วันที่ส่ง
-              "china_tracking": null,
-              "local_courier": "Grab Express",
-              "local_tracking": "GRAB-99887",
-              "feedback":
-                  "ลูกค้าคอนเฟิร์มเลือกเนื้อผ้า Pongee เคลือบ UV เรียบร้อยแล้ว สัมผัสดี",
-            },
-          ],
-        },
-      ],
-    },
-    {
-      "id": "PRJ-015",
-      "customer": "Cafe Amazon",
-      "status": "Pending Client Approval",
-      "products": [
-        {
-          "name": "แก้วน้ำพลาสติก 22oz (Reusable Cup)",
-          "qty": "50,000 ใบ",
-          "specs": "แก้วพลาสติก PP ฉีดสีเขียว Amazon",
-          "client_samples": [
-            {
-              "id": "CS-003",
-              "attempt": 1, // 🌟 ส่งครั้งที่ 1
-              "type": "3D Printed Mockup",
-              "origin": "China",
-              "supplier": "Shenzhen Plastics Hub",
-              "status": "Waiting from China",
-              "sent_date": "05 Jun 2026", // 🌟 วันที่ส่ง
-              "china_tracking": "Waiting for tracking...",
-              "local_courier": "-",
-              "local_tracking": "-",
-              "feedback":
-                  "รอโรงงานส่งตัวอย่าง 3D Mockup มาให้ตรวจสอบก่อนนำไปเสนอลูกค้า",
-            },
-          ],
-        },
-      ],
-    },
-  ];
+  String _searchText = "";
+  String _selectedProjectId = "";
 
   final List<String> _sampleStages = [
     "Waiting from China",
@@ -105,13 +37,170 @@ class _SamplesScreenState extends State<SamplesScreen> {
     "Rejected (Need Revision)",
   ];
 
-  List<Map<String, dynamic>> _getFilteredProjects() {
-    if (_searchText.isEmpty) return _sampleProjects;
-    String searchLower = _searchText.toLowerCase();
-    return _sampleProjects.where((p) {
-      return p['customer'].toString().toLowerCase().contains(searchLower) ||
-          p['id'].toString().toLowerCase().contains(searchLower);
+  @override
+  void initState() {
+    super.initState();
+    _fetchProjects();
+  }
+
+  Future<void> _fetchProjects() async {
+    setState(() {
+      _isLoadingProjects = true;
+    });
+    try {
+      final response = await _api.get(ProjectEndpoints.index, queryParameters: {
+        if (_searchText.isNotEmpty) 'search': _searchText,
+      });
+      final body = response.data;
+      if (body['success'] == true) {
+        setState(() {
+          _projectsDb = body['data'];
+          if (_projectsDb.isNotEmpty) {
+            final exists = _projectsDb.any((p) => p['project_code'] == _selectedProjectId);
+            if (!exists) {
+              _selectedProjectId = _projectsDb[0]['project_code'] ?? "";
+              _fetchSamplesForProject(_projectsDb[0]['id']);
+            } else {
+              final match = _projectsDb.firstWhere((p) => p['project_code'] == _selectedProjectId);
+              _fetchSamplesForProject(match['id']);
+            }
+          } else {
+            _selectedProjectId = "";
+            _dbSamples = [];
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching projects for samples: $e");
+    } finally {
+      setState(() {
+        _isLoadingProjects = false;
+      });
+    }
+  }
+
+  Future<void> _fetchSamplesForProject(int pid) async {
+    setState(() {
+      _isLoadingSamples = true;
+    });
+    try {
+      final response = await _api.get(SampleEndpoints.byProject(pid));
+      final body = response.data;
+      if (body['success'] == true) {
+        setState(() {
+          _dbSamples = body['data'];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching samples: $e");
+    } finally {
+      setState(() {
+        _isLoadingSamples = false;
+      });
+    }
+  }
+
+  Map<String, dynamic> _mapDbProjectToSampleMock(Map<String, dynamic> dbProject) {
+    final List<dynamic> dbProducts = dbProject['product_items'] ?? [];
+    final List<Map<String, dynamic>> mappedProducts = dbProducts.map((p) {
+      final int pId = p['id'];
+      final List<dynamic> productSamples = _dbSamples.where((s) => s['product_item_id'] == pId).toList();
+      final List<Map<String, dynamic>> mappedSamples = productSamples.map((s) {
+        String status = s['status'] ?? "Waiting from China";
+        if (status == "Approved") status = "Approved by Client";
+        if (status == "Rejected") status = "Rejected (Need Revision)";
+
+        return {
+          "id": s['sample_code'] ?? "CS-000",
+          "db_id": s['id'],
+          "attempt": s['attempt'] ?? 1,
+          "type": s['sample_type'] ?? "Material Swatch",
+          "origin": s['origin'] ?? "In-Stock",
+          "supplier": s['supplier_name'] ?? "-",
+          "status": status,
+          "sent_date": s['sent_date'] ?? "-",
+          "china_tracking": s['china_tracking'],
+          "local_courier": s['local_courier'],
+          "local_tracking": s['local_tracking'],
+          "feedback": s['feedback'] ?? "ไม่มีข้อคิดเห็นเพิ่มเติม",
+        };
+      }).toList();
+
+      return {
+        "id": pId,
+        "name": p['name'] ?? "สินค้าทั่วไป",
+        "qty": "${p['qty'] ?? 0} ${p['unit'] ?? 'หน่วย'}",
+        "specs": p['specs'] ?? "ไม่มีรายละเอียดข้อมูลจำเพาะ",
+        "client_samples": mappedSamples,
+      };
     }).toList();
+
+    return {
+      "id": dbProject['project_code'] ?? "PRJ-000",
+      "db_id": dbProject['id'],
+      "customer": dbProject['customer']?['name'] ?? "ลูกค้าทั่วไป",
+      "status": dbProject['status'] ?? "Inquiry",
+      "products": mappedProducts,
+    };
+  }
+
+  List<Map<String, dynamic>> _getFilteredProjects() {
+    return _projectsDb.map((p) => _mapDbProjectToSampleMock(p)).toList();
+  }
+
+  Future<void> _selectSentDate(
+    BuildContext context,
+    TextEditingController controller,
+    Function(String) onDateSelected,
+    StateSetter setDialogState,
+  ) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF1D1D1F),
+              onPrimary: Colors.white,
+              onSurface: Color(0xFF1D1D1F),
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF1D1D1F),
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      final formatted = "${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}";
+      controller.text = formatted;
+      setDialogState(() {
+        onDateSelected(formatted);
+      });
+    }
+  }
+
+  String _parseDateToDb(String dateStr) {
+    if (dateStr.isEmpty || dateStr == "Today" || dateStr == "-") {
+      final now = DateTime.now();
+      return "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
+    }
+    final dbRegExp = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+    if (dbRegExp.hasMatch(dateStr)) {
+      return dateStr;
+    }
+    final parts = dateStr.split('/');
+    if (parts.length == 3) {
+      return "${parts[2]}-${parts[1]}-${parts[0]}";
+    }
+    final now = DateTime.now();
+    return "${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}";
   }
 
   @override
@@ -205,7 +294,12 @@ class _SamplesScreenState extends State<SamplesScreen> {
                     vertical: 8,
                   ),
                   child: TextField(
-                    onChanged: (val) => setState(() => _searchText = val),
+                    onChanged: (val) {
+                      setState(() {
+                        _searchText = val;
+                      });
+                      _fetchProjects();
+                    },
                     decoration: InputDecoration(
                       hintText: "ค้นหารหัส, ชื่อลูกค้า...",
                       prefixIcon: const Icon(
@@ -225,23 +319,31 @@ class _SamplesScreenState extends State<SamplesScreen> {
                 ),
                 const SizedBox(height: 16),
                 Expanded(
-                  child: filteredProjects.isEmpty
+                  child: _isLoadingProjects
                       ? const Center(
-                          child: Text(
-                            "No projects found",
-                            style: TextStyle(color: Color(0xFF86868B)),
-                          ),
+                          child: CircularProgressIndicator(),
                         )
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          itemCount: filteredProjects.length,
-                          itemBuilder: (context, index) {
-                            final p = filteredProjects[index];
-                            final isSelected = _selectedProjectId == p['id'];
+                      : filteredProjects.isEmpty
+                          ? const Center(
+                              child: Text(
+                                "No projects found",
+                                style: TextStyle(color: Color(0xFF86868B)),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: filteredProjects.length,
+                              itemBuilder: (context, index) {
+                                final p = filteredProjects[index];
+                                final isSelected = _selectedProjectId == p['id'];
 
-                            return InkWell(
-                              onTap: () =>
-                                  setState(() => _selectedProjectId = p['id']),
+                                return InkWell(
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedProjectId = p['id'];
+                                    });
+                                    _fetchSamplesForProject(p['db_id']);
+                                  },
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
                                 margin: const EdgeInsets.only(bottom: 12),
@@ -339,8 +441,12 @@ class _SamplesScreenState extends State<SamplesScreen> {
                       style: TextStyle(color: Color(0xFF86868B)),
                     ),
                   )
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.all(48.0),
+                : _isLoadingSamples
+                    ? const Center(
+                        child: CircularProgressIndicator(),
+                      )
+                    : SingleChildScrollView(
+                        padding: const EdgeInsets.all(48.0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -650,8 +756,23 @@ class _SamplesScreenState extends State<SamplesScreen> {
                             (s) => DropdownMenuItem(value: s, child: Text(s)),
                           )
                           .toList(),
-                      onChanged: (val) {
-                        setState(() => sample['status'] = val!);
+                      onChanged: (val) async {
+                        String dbStatus = val!;
+                        if (dbStatus == "Approved by Client") dbStatus = "Approved";
+                        if (dbStatus == "Rejected (Need Revision)") dbStatus = "Rejected";
+
+                        try {
+                          final response = await _api.patch(
+                            SampleEndpoints.status(sample['db_id']),
+                            data: {'status': dbStatus},
+                          );
+                          if (response.data['success'] == true) {
+                            final match = _projectsDb.firstWhere((p) => p['project_code'] == _selectedProjectId);
+                            _fetchSamplesForProject(match['id']);
+                          }
+                        } catch (e) {
+                          debugPrint("Error updating sample status: $e");
+                        }
                       },
                     ),
                   ),
@@ -945,12 +1066,18 @@ class _SamplesScreenState extends State<SamplesScreen> {
     BuildContext context,
     Map<String, dynamic> project,
   ) {
-    String selectedProduct = project['products'][0]['name'];
+    int selectedProduct = (project['products'] as List).isNotEmpty
+        ? project['products'][0]['id']
+        : 0;
+    String selectedType = "Material Swatch";
     String courier = "";
     String trackNo = "";
     String note = "";
-    // Default เป็นวันนี้
-    String sentDate = "28 Jun 2026";
+    // Default to today formatted as DD/MM/YYYY
+    final now = DateTime.now();
+    String sentDate = "${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}";
+
+    final TextEditingController dateController = TextEditingController(text: sentDate);
 
     showDialog(
       context: context,
@@ -982,8 +1109,8 @@ class _SamplesScreenState extends State<SamplesScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedProduct,
+                    DropdownButtonFormField<int>(
+                      value: selectedProduct,
                       decoration: InputDecoration(
                         filled: true,
                         fillColor: const Color(0xFFF4F5F7),
@@ -994,14 +1121,55 @@ class _SamplesScreenState extends State<SamplesScreen> {
                       ),
                       items: (project['products'] as List)
                           .map(
-                            (p) => DropdownMenuItem<String>(
-                              value: p['name'],
-                              child: Text(p['name']),
+                            (p) => DropdownMenuItem<int>(
+                              value: p['id'] as int,
+                              child: Text(p['name'] ?? 'สินค้า #${p['id']}'),
                             ),
                           )
                           .toList(),
                       onChanged: (val) =>
                           setDialogState(() => selectedProduct = val!),
+                    ),
+                    const SizedBox(height: 16),
+
+                    const Text(
+                      "1.5. Sample Type (ประเภทตัวอย่าง)",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: selectedType,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: const Color(0xFFF4F5F7),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: "Pre-production Sample",
+                          child: Text("Pre-production Sample (PPS)"),
+                        ),
+                        DropdownMenuItem(
+                          value: "Material Swatch",
+                          child: Text("Material Swatch (ชิ้นผ้า)"),
+                        ),
+                        DropdownMenuItem(
+                          value: "3D Printed Mockup",
+                          child: Text("3D Printed Mockup"),
+                        ),
+                        DropdownMenuItem(
+                          value: "Other",
+                          child: Text("Other (อื่นๆ)"),
+                        ),
+                      ],
+                      onChanged: (val) =>
+                          setDialogState(() => selectedType = val!),
                     ),
                     const SizedBox(height: 16),
 
@@ -1018,9 +1186,21 @@ class _SamplesScreenState extends State<SamplesScreen> {
                         Expanded(
                           flex: 1,
                           child: TextFormField(
-                            initialValue: sentDate,
+                            controller: dateController,
+                            readOnly: true,
+                            onTap: () => _selectSentDate(
+                              context,
+                              dateController,
+                              (val) => sentDate = val,
+                              setDialogState,
+                            ),
                             decoration: InputDecoration(
-                              hintText: "Date Sent (e.g. 28 Jun)",
+                              hintText: "Date Sent",
+                              suffixIcon: const Icon(
+                                Icons.calendar_today,
+                                size: 16,
+                                color: Color(0xFF86868B),
+                              ),
                               filled: true,
                               fillColor: const Color(0xFFF4F5F7),
                               border: OutlineInputBorder(
@@ -1028,7 +1208,6 @@ class _SamplesScreenState extends State<SamplesScreen> {
                                 borderSide: BorderSide.none,
                               ),
                             ),
-                            onChanged: (val) => sentDate = val,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -1098,35 +1277,40 @@ class _SamplesScreenState extends State<SamplesScreen> {
                 child: const Text("Cancel"),
               ),
               ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    var prod = (project['products'] as List).firstWhere(
-                      (p) => p['name'] == selectedProduct,
+                onPressed: () async {
+                  if (selectedProduct == 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Please select a product")),
                     );
-                    if (prod['client_samples'] == null) {
-                      prod['client_samples'] = [];
-                    }
+                    return;
+                  }
 
-                    // 🌟 คำนวณครั้งที่ส่ง
-                    int attemptNum =
-                        (prod['client_samples'] as List).length + 1;
+                  final int productItemId = selectedProduct;
+                  final int projectDbId = project['db_id'];
 
-                    prod['client_samples'].add({
-                      "id": "CS-NEW-$attemptNum",
-                      "attempt": attemptNum,
-                      "type": "In-Stock Sample",
-                      "origin": "In-Stock",
-                      "supplier": "-",
-                      "status": "Sent to Client",
-                      "sent_date": sentDate.isEmpty
-                          ? "Today"
-                          : sentDate, // 🌟 วันที่ส่ง
-                      "china_tracking": null, // ไม่มีของจากจีน
-                      "local_courier": courier.isEmpty ? "TBD" : courier,
-                      "local_tracking": trackNo.isEmpty ? "-" : trackNo,
-                      "feedback": note,
+                  try {
+                    final String dbFormattedDate = _parseDateToDb(sentDate);
+                    
+                    final storeResponse = await _api.post(SampleEndpoints.store, data: {
+                      'project_id': projectDbId,
+                      'product_item_id': productItemId,
+                      'sample_type': selectedType,
+                      'origin': 'In-Stock',
+                      'supplier_name': '-',
+                      'status': 'Sent to Client',
+                      'sent_date': dbFormattedDate,
+                      'local_courier': courier.isEmpty ? 'TBD' : courier,
+                      'local_tracking': trackNo.isEmpty ? '-' : trackNo,
+                      'feedback': note.isEmpty ? 'ไม่มีคอมเมนต์เพิ่มเติม' : note,
                     });
-                  });
+
+                    if (storeResponse.data['success'] == true) {
+                      _fetchSamplesForProject(projectDbId);
+                    }
+                  } catch (e) {
+                    debugPrint("Error saving sample record: $e");
+                  }
+
                   Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
@@ -1151,10 +1335,10 @@ class _SamplesScreenState extends State<SamplesScreen> {
   }) {
     String courier = isChinaTracking
         ? (sample['supplier'] ?? "")
-        : sample['local_courier'];
+        : (sample['local_courier'] ?? "");
     String trackNo = isChinaTracking
         ? (sample['china_tracking'] ?? "")
-        : sample['local_tracking'];
+        : (sample['local_tracking'] ?? "");
 
     trackNo = trackNo.contains("Wait") ? "" : trackNo;
 
@@ -1208,18 +1392,29 @@ class _SamplesScreenState extends State<SamplesScreen> {
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            onPressed: () {
-              setState(() {
+            onPressed: () async {
+              try {
+                final Map<String, dynamic> updatePayload = {};
                 if (isChinaTracking) {
-                  sample['supplier'] = courier;
-                  sample['china_tracking'] = trackNo.isEmpty
-                      ? "Waiting for tracking..."
-                      : trackNo;
+                  updatePayload['supplier_name'] = courier;
+                  updatePayload['china_tracking'] = trackNo;
                 } else {
-                  sample['local_courier'] = courier;
-                  sample['local_tracking'] = trackNo.isEmpty ? "-" : trackNo;
+                  updatePayload['local_courier'] = courier;
+                  updatePayload['local_tracking'] = trackNo;
                 }
-              });
+
+                final response = await _api.put(
+                  SampleEndpoints.update(sample['db_id']),
+                  data: updatePayload,
+                );
+                
+                if (response.data['success'] == true) {
+                  final match = _projectsDb.firstWhere((p) => p['project_code'] == _selectedProjectId);
+                  _fetchSamplesForProject(match['id']);
+                }
+              } catch (e) {
+                debugPrint("Error updating sample tracking: $e");
+              }
               Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(
@@ -1270,8 +1465,26 @@ class _SamplesScreenState extends State<SamplesScreen> {
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            onPressed: () {
-              setState(() => sample['feedback'] = feedback);
+            onPressed: () async {
+              try {
+                String dbStatus = sample['status'] ?? "Waiting from China";
+                if (dbStatus == "Approved by Client") dbStatus = "Approved";
+                if (dbStatus == "Rejected (Need Revision)") dbStatus = "Rejected";
+
+                final response = await _api.patch(
+                  SampleEndpoints.status(sample['db_id']),
+                  data: {
+                    'status': dbStatus,
+                    'feedback': feedback,
+                  },
+                );
+                if (response.data['success'] == true) {
+                  final match = _projectsDb.firstWhere((p) => p['project_code'] == _selectedProjectId);
+                  _fetchSamplesForProject(match['id']);
+                }
+              } catch (e) {
+                debugPrint("Error updating sample feedback: $e");
+              }
               Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(

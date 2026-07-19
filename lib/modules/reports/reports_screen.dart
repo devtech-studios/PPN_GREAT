@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:ppn_great/core/api/api_client.dart';
+import 'package:ppn_great/core/api/api_endpoints.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -15,11 +17,97 @@ class _ReportsScreenState extends State<ReportsScreen> {
   String _filterValue = "Jun 2026";
 
   // =========================================================
-  // MOCK DATA สรุปภาพรวมและข้อมูลของทุก REPORT
+  // API INTEGRATION & REAL DATA STATE
+  // =========================================================
+  final ApiClient _api = ApiClient();
+  bool _isLoading = false;
+
+  Map<String, dynamic> _financialSummary = {};
+  Map<String, dynamic> _operationalSummary = {};
+  List<dynamic> _revenueByMonth = [];
+  List<dynamic> _profitByProject = [];
+  List<dynamic> _realPayments = [];
+  List<dynamic> _realContainers = [];
+  List<dynamic> _realRounds = [];
+  List<dynamic> _realProjects = [];
+
+  int _parseInt(dynamic val) {
+    if (val == null) return 0;
+    if (val is int) return val;
+    if (val is double) return val.toInt();
+    if (val is String) return int.tryParse(val) ?? 0;
+    return int.tryParse(val.toString()) ?? 0;
+  }
+
+  double _parseDouble(dynamic val) {
+    if (val == null) return 0.0;
+    if (val is double) return val;
+    if (val is int) return val.toDouble();
+    if (val is String) return double.tryParse(val) ?? 0.0;
+    return double.tryParse(val.toString()) ?? 0.0;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
+
+  Future<void> _fetchData() async {
+    setState(() => _isLoading = true);
+    try {
+      final fRes = await _api.get(ReportEndpoints.financialSummary);
+      final oRes = await _api.get(ReportEndpoints.operationalSummary);
+      final mRes = await _api.get(ReportEndpoints.revenueByMonth);
+      final pRes = await _api.get(ReportEndpoints.profitByProject);
+      final payRes = await _api.get('/finance/payments');
+      final cRes = await _api.get(ContainerEndpoints.index);
+      final rRes = await _api.get(DeliveryEndpoints.index);
+      final projRes = await _api.get(ProjectEndpoints.index);
+
+      if (mounted) {
+        setState(() {
+          if (fRes.data['success'] == true) {
+            _financialSummary = fRes.data['data'] ?? {};
+          }
+          if (oRes.data['success'] == true) {
+            _operationalSummary = oRes.data['data'] ?? {};
+          }
+          if (mRes.data['success'] == true) {
+            _revenueByMonth = mRes.data['data'] ?? [];
+          }
+          if (pRes.data['success'] == true) {
+            _profitByProject = pRes.data['data'] ?? [];
+          }
+          if (payRes.data['success'] == true) {
+            _realPayments = payRes.data['data'] ?? [];
+          }
+          if (cRes.data['success'] == true) {
+            _realContainers = cRes.data['data'] ?? [];
+          }
+          if (rRes.data['success'] == true) {
+            _realRounds = rRes.data['data'] ?? [];
+          }
+          if (projRes.data['success'] == true) {
+            _realProjects = projRes.data['data'] ?? [];
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching reports: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  // =========================================================
+  // MOCK DATA สรุปภาพรวมและข้อมูลของทุก REPORT (พร้อม Getters เชื่อม API)
   // =========================================================
 
   // ข้อมูลคาดการณ์รายรับ (Revenue Forecast)
-  final List<Map<String, dynamic>> _revenueData = [
+  final List<Map<String, dynamic>> _mockRevenueData = [
     {
       "date": "05 Jun 2026",
       "project": "PRJ-009",
@@ -62,7 +150,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
     },
   ];
 
-  final Map<String, dynamic> _companyStats = {
+  List<dynamic> get _revenueData {
+    if (_realPayments.isNotEmpty) {
+      return _realPayments.map((p) {
+        final cust = p['customer']?['name'] ?? 'N/A';
+        final proj = p['project']?['project_code'] ?? 'N/A';
+        final doc = p['finance_document']?['doc_no'] ?? 'N/A';
+        return {
+          "date": p['payment_date'] ?? 'N/A',
+          "project": proj,
+          "customer": cust,
+          "amount": _parseDouble(p['amount']),
+          "status": p['status'] == 'Confirmed' ? 'Paid' : 'Pending',
+          "invoice": doc,
+        };
+      }).toList();
+    }
+    return _mockRevenueData;
+  }
+
+  final Map<String, dynamic> _mockCompanyStats = {
     "net_cash_balance": 2850000.0,
     "ar_pending": 1200000.0,
     "ap_pending": 450000.0,
@@ -72,7 +179,22 @@ class _ReportsScreenState extends State<ReportsScreen> {
     "avg_lead_time": 45,
   };
 
-  final List<Map<String, dynamic>> _projectData = [
+  Map<String, dynamic> get _companyStats {
+    if (_financialSummary.isNotEmpty || _operationalSummary.isNotEmpty) {
+      return {
+        "net_cash_balance": _parseDouble(_financialSummary['total_revenue']),
+        "ar_pending": _parseDouble(_financialSummary['total_revenue']) - _parseDouble(_financialSummary['total_cogs']),
+        "ap_pending": _parseDouble(_financialSummary['total_cogs']),
+        "total_active_orders": _parseInt(_operationalSummary['active_projects_count']),
+        "completed_deliveries": _parseInt(_operationalSummary['completed_projects_count']),
+        "pending_deliveries": _realRounds.where((r) => r['status'] == 'Scheduled').length,
+        "avg_lead_time": _parseInt(_operationalSummary['avg_lead_time_days']),
+      };
+    }
+    return _mockCompanyStats;
+  }
+
+  final List<Map<String, dynamic>> _mockProjectData = [
     {
       "id": "PRJ-001",
       "customer": "Lion (Thailand)",
@@ -111,7 +233,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
     },
   ];
 
-  final List<Map<String, dynamic>> _taxData = [
+  List<dynamic> get _projectData {
+    if (_profitByProject.isNotEmpty) {
+      return _profitByProject.map((p) {
+        return {
+          "id": p['project_code'] ?? 'N/A',
+          "customer": p['customer_name'] ?? 'N/A',
+          "revenue": _parseDouble(p['revenue']),
+          "cogs": _parseDouble(p['cogs']),
+          "ocean_freight": 0.0,
+          "inland_freight": 0.0,
+          "status": "Active",
+          "lead_time": 30,
+          "foc_qty": 0,
+          "category": "General",
+        };
+      }).toList();
+    }
+    return _mockProjectData;
+  }
+
+  final List<Map<String, dynamic>> _mockTaxData = [
     {
       "month": "May 2026",
       "container": "TLLU 1234567",
@@ -134,6 +276,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
       "shipping_fee": 12000.0,
     },
   ];
+
+  List<dynamic> get _taxData {
+    if (_realContainers.isNotEmpty) {
+      return _realContainers.map((c) {
+        final arrival = c['actual_arrival'] ?? c['eta'] ?? '';
+        final month = arrival.isNotEmpty ? arrival.toString().split('-').sublist(0, 2).join('-') : 'N/A';
+        return {
+          "month": month,
+          "container": c['container_no'] ?? 'N/A',
+          "vat": _parseDouble(c['vat']),
+          "duty": _parseDouble(c['duty']),
+          "shipping_fee": _parseDouble(c['shipping_fee']),
+        };
+      }).toList();
+    }
+    return _mockTaxData;
+  }
 
   final List<Map<String, dynamic>> _inventoryAgingData = [
     {
@@ -162,7 +321,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     },
   ];
 
-  final List<Map<String, dynamic>> _deliveryData = [
+  final List<Map<String, dynamic>> _mockDeliveryData = [
     {
       "project": "PRJ-009",
       "customer": "Central Group",
@@ -189,7 +348,27 @@ class _ReportsScreenState extends State<ReportsScreen> {
     },
   ];
 
-  final List<Map<String, dynamic>> _customerPortfolioData = [
+  List<dynamic> get _deliveryData {
+    if (_realRounds.isNotEmpty) {
+      return _realRounds.map((r) {
+        final String date = r['dispatch_date'] ?? 'N/A';
+        final List items = r['items'] ?? [];
+        final String proj = items.isNotEmpty ? (items[0]['project']?['project_code'] ?? 'N/A') : 'N/A';
+        final String cust = items.isNotEmpty ? (items[0]['customer']?['name'] ?? 'N/A') : 'N/A';
+        return {
+          "project": proj,
+          "customer": cust,
+          "batch": "Round ${r['id']}",
+          "date": date,
+          "status": r['status'] ?? 'Pending',
+          "performance": r['status'] == 'Delivered' ? 'On-Time' : 'On-Track',
+        };
+      }).toList();
+    }
+    return _mockDeliveryData;
+  }
+
+  final List<Map<String, dynamic>> _mockCustomerPortfolioData = [
     {
       "customer": "Lion (Thailand)",
       "revenue": 3400000.0,
@@ -215,6 +394,40 @@ class _ReportsScreenState extends State<ReportsScreen> {
       "active_projects": 3,
     },
   ];
+
+  List<dynamic> get _customerPortfolioData {
+    if (_realPayments.isNotEmpty) {
+      final Map<String, double> revenueByCust = {};
+      double totalRevenue = 0.0;
+      final Map<String, Set<int>> activeProjectsByCust = {};
+
+      for (var p in _realPayments) {
+        final String custName = p['customer']?['name'] ?? 'N/A';
+        final double amt = _parseDouble(p['amount']);
+        if (p['status'] == 'Confirmed') {
+          revenueByCust[custName] = (revenueByCust[custName] ?? 0.0) + amt;
+          totalRevenue += amt;
+        }
+        final projId = p['project_id'];
+        if (projId != null) {
+          activeProjectsByCust.putIfAbsent(custName, () => {}).add(projId as int);
+        }
+      }
+
+      if (totalRevenue > 0) {
+        return revenueByCust.entries.map((e) {
+          final share = (e.value / totalRevenue) * 100;
+          return {
+            "customer": e.key,
+            "revenue": e.value,
+            "share": double.parse(share.toStringAsFixed(1)),
+            "active_projects": activeProjectsByCust[e.key]?.length ?? 0,
+          };
+        }).toList();
+      }
+    }
+    return _mockCustomerPortfolioData;
+  }
 
   final List<Map<String, dynamic>> _categoryData = [
     {
@@ -461,7 +674,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
 
     // 2. ฟิลเตอร์ข้อมูลให้ตรงกับเงื่อนไข
-    List<Map<String, dynamic>> filteredRevenue = _revenueData.where((e) {
+    List<dynamic> filteredRevenue = _revenueData.where((e) {
       if (_filterPeriod == "Month" ||
           _filterPeriod == "Year" ||
           _filterPeriod == "Day") {

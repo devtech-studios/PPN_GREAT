@@ -1,5 +1,10 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../core/api/api_client.dart';
+import '../../core/api/api_endpoints.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart' as dio_pkg;
+import '../../core/utils/url_helper.dart';
 
 class MouseDraggableScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -18,9 +23,10 @@ class GeneratePIScreen extends StatefulWidget {
 
 class _GeneratePIScreenState extends State<GeneratePIScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final ApiClient _api = ApiClient();
 
   String _searchText = "";
-  String _selectedProjectId = "PPN-001";
+  String _selectedProjectId = "";
   // ignore: unused_field
   dynamic _selectedSupplierQuote;
 
@@ -33,149 +39,415 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
   // Filter Insights
   String _selectedInsightFilter = "All Active";
 
-  // ==========================================
-  // Mock Data: เพิ่ม supplier_quotes สำหรับดึงราคาต้นทุน
-  // ==========================================
-  final List<Map<String, dynamic>> _projects = [
-    {
-      "id": "PPN-001",
-      "customer": "Lion (Thailand)",
-      "insight_status": "Need Deposit",
-      "supplier_status": "Price Filled",
-      "products": [
-        {"name": "กระเป๋าผ้าคอตตอน 12 ออนซ์", "qty": 20000, "price": 85.0},
-      ],
-      "supplier_quotes": [
-        {
-          "supplier_name": "Guangzhou Bags Factory",
-          "rates": {"กระเป๋าผ้าคอตตอน 12 ออนซ์": 55.0},
-        },
-        {
-          "supplier_name": "Yiwu Textile Co.",
-          "rates": {"กระเป๋าผ้าคอตตอน 12 ออนซ์": 52.5},
-        },
-      ],
-      "docs": {"QU": true, "PI": true, "DP": false, "CI": false},
-      "deposit_amount": 0.0,
-      "grand_total": 1819000.0,
-      "credit_term": "30 Days",
-      "history": [
-        {
-          "doc_no": "QU-2605-001",
-          "type": "Quotation",
-          "ver": "V1",
-          "date": "15 May 2026",
-          "amount": "1,800,000",
-          "details": "กระเป๋า 20,000 ใบ @ 90 บาท",
-          "products": [
-            {"name": "กระเป๋าผ้าคอตตอน 12 ออนซ์", "qty": 20000, "price": 90.0},
-          ],
-        },
-      ],
-      "outbound_expenses": [
-        {
-          "title": "มัดจำค่าสินค้า 30% (โรงงาน Yiwu)",
-          "category": "Cost of Goods (COGS)",
-          "amount": 250000.0,
-          "status": "Paid",
-          "date": "20 May 2026",
-        },
-        {
-          "title": "ค่าตรวจสินค้า (QC) ก่อนส่ง",
-          "category": "Operation",
-          "amount": 5000.0,
-          "status": "Pending",
-          "date": "05 Jun 2026",
-        },
-      ],
-    },
-    {
-      "id": "PPN-009",
-      "customer": "Central Group",
-      "insight_status": "Waiting Credit Term",
-      "supplier_status": "Price Filled",
-      "products": [
-        {"name": "ร่มกอล์ฟ 30 นิ้ว", "qty": 1500, "price": 150.0},
-        {"name": "กระบอกน้ำสแตนเลส เลเซอร์โลโก้", "qty": 2000, "price": 85.0},
-        {"name": "ถุงผ้าสปันบอนด์", "qty": 3000, "price": 25.0},
-      ],
-      "supplier_quotes": [
-        {
-          "supplier_name": "Yiwu Premium Gifts",
-          "rates": {
-            "ร่มกอล์ฟ 30 นิ้ว": 110.0,
-            "กระบอกน้ำสแตนเลส เลเซอร์โลโก้": 60.0,
-            "ถุงผ้าสปันบอนด์": 15.0,
+  bool _isLoading = false;
+  List<Map<String, dynamic>> _projects = [];
+  List<Map<String, dynamic>> _suppliers = [];
+  List<Map<String, dynamic>> _documents = [];
+  List<Map<String, dynamic>> _supplierBills = [];
+
+  List<Map<String, dynamic>> _editingItems = [];
+  double _depositAmountInput = 0.0;
+  bool _isUploadingPO = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchData();
+  }
+
+  void _showSuccessBanner(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF4A9062),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showErrorBanner(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFD97781),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _fetchData() async {
+    if (!mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      // 1. Fetch Projects
+      final projRes = await _api.get(ProjectEndpoints.index);
+      final List rawProj = projRes.data['data'] ?? [];
+
+      // 2. Fetch Suppliers (for record expense dropdown)
+      final supRes = await _api.get(SupplierEndpoints.index);
+      final List rawSup = supRes.data['data'] ?? [];
+
+      if (!mounted) return;
+      setState(() {
+        _projects = List<Map<String, dynamic>>.from(rawProj);
+        _suppliers = List<Map<String, dynamic>>.from(rawSup);
+        if (_projects.isNotEmpty) {
+          if (_selectedProjectId.isEmpty ||
+              !_projects.any((p) => p['project_code'] == _selectedProjectId)) {
+            _selectedProjectId = _projects[0]['project_code'] ?? '';
+          }
+        }
+      });
+
+      if (_selectedProjectId.isNotEmpty) {
+        await _fetchProjectDetails();
+        final proj = _projects.firstWhere(
+          (p) => p['project_code'] == _selectedProjectId,
+          orElse: () => <String, dynamic>{},
+        );
+        if (proj.isNotEmpty) {
+          _syncEditingItems(_formatProject(proj));
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching finance data: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _fetchProjectDetails() async {
+    if (_selectedProjectId.isEmpty) return;
+
+    final proj = _projects.firstWhere(
+      (p) => p['project_code'] == _selectedProjectId,
+      orElse: () => <String, dynamic>{},
+    );
+    if (proj.isEmpty) return;
+
+    final int pId = proj['id'];
+
+    try {
+      // Fetch documents for the project
+      final docRes = await _api.get(
+        FinanceEndpoints.documents,
+        queryParameters: {'project_id': pId},
+      );
+      final List rawDocs = docRes.data['data'] ?? [];
+
+      // Fetch supplier bills for the project
+      final billRes = await _api.get(
+        '/finance/supplier-bills',
+        queryParameters: {'project_id': pId},
+      );
+      final List rawBills = billRes.data['data'] ?? [];
+
+      if (!mounted) return;
+      setState(() {
+        _documents = List<Map<String, dynamic>>.from(rawDocs);
+        _supplierBills = List<Map<String, dynamic>>.from(rawBills);
+      });
+    } catch (e) {
+      debugPrint("Error fetching project details: $e");
+    }
+  }
+
+  void _syncEditingItems(Map<String, dynamic> project) {
+    setState(() {
+      _editingItems = List<Map<String, dynamic>>.from(
+        project['products'].map((p) => Map<String, dynamic>.from(p)),
+      );
+      _depositAmountInput =
+          double.tryParse(project['deposit_amount']?.toString() ?? '0.0') ??
+          0.0;
+      if (_depositAmountInput <= 0) {
+        _depositAmountInput = (project['grand_total'] ?? 0.0) * 0.3;
+      }
+    });
+  }
+
+  Future<void> _onProjectOrTabChanged(String projectId, String tabId) async {
+    setState(() {
+      _selectedProjectId = projectId;
+      _activeDocTab = tabId;
+    });
+    await _fetchProjectDetails();
+    final proj = _projects.firstWhere(
+      (p) => p['project_code'] == _selectedProjectId,
+      orElse: () => <String, dynamic>{},
+    );
+    if (proj.isNotEmpty) {
+      _syncEditingItems(_formatProject(proj));
+    }
+  }
+
+  String _formatExpenseDate(String? rawDate) {
+    if (rawDate == null || rawDate.isEmpty) return 'Today';
+    try {
+      final cleaned = rawDate.split('T').first;
+      final parts = cleaned.split('-');
+      if (parts.length == 3) {
+        final year = parts[0];
+        final month = parts[1];
+        final day = parts[2];
+        return "$day/$month/$year";
+      } else if (parts.length == 2) {
+        final year = parts[0];
+        final month = parts[1];
+        return "01/$month/$year";
+      }
+    } catch (e) {
+      debugPrint("Error formatting date: $e");
+    }
+    return rawDate;
+  }
+
+  Map<String, dynamic> _formatProject(Map<String, dynamic> p) {
+    final List itemsList = p['product_items'] ?? p['productItems'] ?? [];
+    final pId = p['id'] ?? 0;
+
+    final projectDocs = _documents
+        .where((d) => d['project_id'] == pId && d['status'] != 'Cancelled')
+        .toList();
+
+    final bool hasQU = projectDocs.any((d) => d['doc_type'] == 'QU');
+    final bool hasPI = projectDocs.any((d) => d['doc_type'] == 'PI');
+    final bool hasDP = projectDocs.any((d) => d['doc_type'] == 'DP');
+    final bool hasCI = projectDocs.any((d) => d['doc_type'] == 'CI');
+
+    final quDoc = projectDocs.firstWhere(
+      (d) => d['doc_type'] == 'QU',
+      orElse: () => <String, dynamic>{},
+    );
+    final piDoc = projectDocs.firstWhere(
+      (d) => d['doc_type'] == 'PI',
+      orElse: () => <String, dynamic>{},
+    );
+    final dpDoc = projectDocs.firstWhere(
+      (d) => d['doc_type'] == 'DP',
+      orElse: () => <String, dynamic>{},
+    );
+
+    double depositAmount = 0.0;
+    if (dpDoc.isNotEmpty) {
+      depositAmount =
+          double.tryParse(dpDoc['total_amount']?.toString() ?? '0.0') ?? 0.0;
+    } else if (piDoc.isNotEmpty) {
+      depositAmount =
+          (double.tryParse(piDoc['total_amount']?.toString() ?? '0.0') ?? 0.0) *
+          0.3;
+    } else if (quDoc.isNotEmpty) {
+      depositAmount =
+          (double.tryParse(quDoc['total_amount']?.toString() ?? '0.0') ?? 0.0) *
+          0.3;
+    } else {
+      depositAmount =
+          (double.tryParse(p['order_value']?.toString() ?? '0.0') ?? 0.0) * 0.3;
+    }
+
+    final history = projectDocs
+        .map(
+          (d) => {
+            'id': d['id'],
+            'doc_no': d['doc_no'] ?? '',
+            'type': d['doc_type'] == 'QU'
+                ? 'Quotation'
+                : (d['doc_type'] == 'PI'
+                      ? 'Proforma Invoice'
+                      : (d['doc_type'] == 'DP'
+                            ? 'Deposit Receipt'
+                            : 'Commercial Invoice')),
+            'ver': 'V1',
+            'date': d['issue_date'] != null
+                ? d['issue_date'].toString().split(' ').first
+                : '',
+            'amount': d['total_amount']?.toString() ?? '0.0',
+            'products': (d['items'] as List? ?? [])
+                .map(
+                  (it) => {
+                    'name': it['item_name'] ?? '',
+                    'qty': it['qty'] ?? 0,
+                    'price':
+                        double.tryParse(
+                          it['unit_price']?.toString() ?? '0.0',
+                        ) ??
+                        0.0,
+                  },
+                )
+                .toList(),
           },
-        },
-      ],
-      "docs": {"QU": true, "PI": true, "DP": true, "CI": true},
-      "deposit_amount": 100000.0,
-      "grand_total": 502900.0,
-      "credit_term": "45 Days (Due: 15 Jul 2026)",
-      "history": [
-        {
-          "doc_no": "CI-2605-004",
-          "type": "Commercial Invoice",
-          "ver": "V1",
-          "date": "10 May 2026",
-          "amount": "402,900",
-          "details": "เรียกเก็บส่วนที่เหลือ",
-          "products": [
-            {"name": "ร่มกอล์ฟ 30 นิ้ว", "qty": 1500, "price": 150.0},
-            {
-              "name": "กระบอกน้ำสแตนเลส เลเซอร์โลโก้",
-              "qty": 2000,
-              "price": 85.0,
+        )
+        .toList();
+
+    final outboundExpenses = _supplierBills
+        .map(
+          (b) => {
+            'id': b['id'],
+            'title': b['product_name'] ?? '',
+            'category': b['bill_type'] == 'Deposit'
+                ? 'Cost of Goods (COGS)'
+                : 'Operation',
+            'amount': double.tryParse(b['amount']?.toString() ?? '0.0') ?? 0.0,
+            'status': b['status'] ?? 'Pending',
+            'date': _formatExpenseDate(b['created_at'] ?? b['due_month']),
+            'supplier_name': b['supplier']?['name'] ?? '',
+          },
+        )
+        .toList();
+
+    List<Map<String, dynamic>> products = [];
+    if (_activeDocTab == 'QU') {
+      if (quDoc.isNotEmpty) {
+        products = (quDoc['items'] as List? ?? [])
+            .map<Map<String, dynamic>>(
+              (it) => {
+                'name': it['item_name'] ?? '',
+                'qty': it['qty'] ?? 0,
+                'price':
+                    double.tryParse(it['unit_price']?.toString() ?? '0.0') ??
+                    0.0,
+              },
+            )
+            .toList();
+      } else {
+        products = itemsList
+            .map<Map<String, dynamic>>(
+              (it) => {
+                'name': it['name'] ?? '',
+                'qty': it['qty'] ?? 1,
+                'price': 0.0,
+              },
+            )
+            .toList();
+      }
+    } else if (_activeDocTab == 'PI') {
+      if (piDoc.isNotEmpty) {
+        products = (piDoc['items'] as List? ?? [])
+            .map<Map<String, dynamic>>(
+              (it) => {
+                'name': it['item_name'] ?? '',
+                'qty': it['qty'] ?? 0,
+                'price':
+                    double.tryParse(it['unit_price']?.toString() ?? '0.0') ??
+                    0.0,
+              },
+            )
+            .toList();
+      } else if (quDoc.isNotEmpty) {
+        products = (quDoc['items'] as List? ?? [])
+            .map<Map<String, dynamic>>(
+              (it) => {
+                'name': it['item_name'] ?? '',
+                'qty': it['qty'] ?? 0,
+                'price':
+                    double.tryParse(it['unit_price']?.toString() ?? '0.0') ??
+                    0.0,
+              },
+            )
+            .toList();
+      } else {
+        products = itemsList
+            .map<Map<String, dynamic>>(
+              (it) => {
+                'name': it['name'] ?? '',
+                'qty': it['qty'] ?? 1,
+                'price': 0.0,
+              },
+            )
+            .toList();
+      }
+    } else if (_activeDocTab == 'CI') {
+      final ciDoc = projectDocs.firstWhere(
+        (d) => d['doc_type'] == 'CI',
+        orElse: () => <String, dynamic>{},
+      );
+      if (ciDoc.isNotEmpty) {
+        products = (ciDoc['items'] as List? ?? [])
+            .map<Map<String, dynamic>>(
+              (it) => {
+                'name': it['item_name'] ?? '',
+                'qty': it['qty'] ?? 0,
+                'price':
+                    double.tryParse(it['unit_price']?.toString() ?? '0.0') ??
+                    0.0,
+              },
+            )
+            .toList();
+      } else if (piDoc.isNotEmpty) {
+        products = (piDoc['items'] as List? ?? [])
+            .map<Map<String, dynamic>>(
+              (it) => {
+                'name': it['item_name'] ?? '',
+                'qty': it['qty'] ?? 0,
+                'price':
+                    double.tryParse(it['unit_price']?.toString() ?? '0.0') ??
+                    0.0,
+              },
+            )
+            .toList();
+      } else if (quDoc.isNotEmpty) {
+        products = (quDoc['items'] as List? ?? [])
+            .map<Map<String, dynamic>>(
+              (it) => {
+                'name': it['item_name'] ?? '',
+                'qty': it['qty'] ?? 0,
+                'price':
+                    double.tryParse(it['unit_price']?.toString() ?? '0.0') ??
+                    0.0,
+              },
+            )
+            .toList();
+      } else {
+        products = itemsList
+            .map<Map<String, dynamic>>(
+              (it) => {
+                'name': it['name'] ?? '',
+                'qty': it['qty'] ?? 1,
+                'price': 0.0,
+              },
+            )
+            .toList();
+      }
+    } else {
+      products = itemsList
+          .map<Map<String, dynamic>>(
+            (it) => {
+              'name': it['name'] ?? '',
+              'qty': it['qty'] ?? 1,
+              'price': 0.0,
             },
-            {"name": "ถุงผ้าสปันบอนด์", "qty": 3000, "price": 25.0},
-          ],
-        },
-      ],
-      "outbound_expenses": [
-        {
-          "title": "ค่าผลิตร่มกอล์ฟ (งวด 1)",
-          "category": "Cost of Goods (COGS)",
-          "amount": 80000.0,
-          "status": "Paid",
-          "date": "15 May 2026",
-        },
-        {
-          "title": "ค่าขนส่งทางเรือ LCL",
-          "category": "Shipping & Logistics",
-          "amount": 25000.0,
-          "status": "Paid",
-          "date": "10 Jun 2026",
-        },
-        {
-          "title": "ภาษีนำเข้าศุลกากร",
-          "category": "Tax & Customs",
-          "amount": 12500.0,
-          "status": "Pending",
-          "date": "12 Jun 2026",
-        },
-      ],
-    },
-    {
-      "id": "PPN-015",
-      "customer": "Tesla Thailand",
-      "insight_status": "Awaiting PO",
-      "supplier_status": "Not Responded",
-      "products": [
-        {"name": "สายชาร์จ EV พรีเมียม หุ้มสายถัก", "qty": 5000, "price": 0.0},
-      ],
-      "supplier_quotes": [],
-      "docs": {"QU": false, "PI": false, "DP": false, "CI": false},
-      "deposit_amount": 0.0,
-      "grand_total": 0.0,
-      "credit_term": "TBD",
-      "history": [],
-      "outbound_expenses": [],
-    },
-  ];
+          )
+          .toList();
+    }
+
+    return {
+      'id': p['project_code'] ?? p['id'].toString(),
+      'db_id': p['id'],
+      'customer': p['customer'] is Map
+          ? (p['customer']['name'] ?? '')
+          : p['customer'].toString(),
+      'insight_status': p['status'] == 'Production'
+          ? 'Need Deposit'
+          : (p['status'] == 'Shipping' ? 'Waiting Credit Term' : 'Awaiting PO'),
+      'supplier_status': 'Price Filled',
+      'products': products,
+      'supplier_quotes': [],
+      'docs': {'QU': hasQU, 'PI': hasPI, 'DP': hasDP, 'CI': hasCI},
+      'deposit_amount': depositAmount,
+      'grand_total':
+          double.tryParse(p['order_value']?.toString() ?? '0.0') ?? 0.0,
+      'credit_term': p['credit_term'] ?? '30 Days',
+      'history': history,
+      'outbound_expenses': outboundExpenses,
+      'po_file_path': p['po_file_path'] ?? '',
+      'po_file_name': p['po_file_name'] ?? '',
+    };
+  }
 
   List<Map<String, dynamic>> _getFilteredProjects() {
-    var result = _projects;
+    var result = _projects.map((p) => _formatProject(p)).toList();
     if (_selectedInsightFilter != "All Active") {
       result = result
           .where((p) => p['insight_status'] == _selectedInsightFilter)
@@ -196,11 +468,24 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_projects.isEmpty) {
+      return Scaffold(
+        body: Center(
+          child: _isLoading
+              ? const CircularProgressIndicator(color: Color(0xFF5B7BD5))
+              : const Text(
+                  "ไม่พบข้อมูลโปรเจกต์",
+                  style: TextStyle(fontFamily: 'Prompt'),
+                ),
+        ),
+      );
+    }
+
     final filteredProjects = _getFilteredProjects();
 
     Map<String, dynamic> selectedProject;
     if (filteredProjects.isEmpty) {
-      selectedProject = _projects[0]; // Fallback
+      selectedProject = _formatProject(_projects[0]); // Fallback
     } else {
       if (!filteredProjects.any((p) => p['id'] == _selectedProjectId)) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -380,22 +665,20 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                       }
 
                       return InkWell(
-                        onTap: () => setState(() {
-                          _selectedProjectId = p['id'];
-                          _selectedSupplierQuote =
-                              null; // รีเซ็ตซัพเมื่อเปลี่ยนโปรเจกต์
-
-                          // Auto route tab
+                        onTap: () {
+                          _selectedSupplierQuote = null;
+                          String targetTab = "QU";
                           if (!p['docs']['PI']) {
-                            _activeDocTab = "QU";
+                            targetTab = "QU";
                           } else if (!p['docs']['DP']) {
-                            _activeDocTab = "PI";
+                            targetTab = "PI";
                           } else if (!p['docs']['CI']) {
-                            _activeDocTab = "DP";
+                            targetTab = "DP";
                           } else {
-                            _activeDocTab = "CI";
+                            targetTab = "CI";
                           }
-                        }),
+                          _onProjectOrTabChanged(p['id'], targetTab);
+                        },
                         borderRadius: BorderRadius.circular(16),
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 8),
@@ -625,6 +908,7 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
           children: [
             Expanded(
               child: _buildFileUploadCard(
+                project,
                 "Client PO / Approved Quote",
                 "อัปโหลดใบสั่งซื้อหรือหลักฐานจากลูกค้า",
                 Icons.document_scanner_outlined,
@@ -711,7 +995,7 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
         : (_activeDocTab == "PI" ? "Proforma Invoice" : "Commercial Invoice");
 
     double subtotal = 0;
-    for (var prod in project['products']) {
+    for (var prod in _editingItems) {
       double p = double.tryParse(prod['price'].toString()) ?? 0.0;
       int q = int.tryParse(prod['qty'].toString()) ?? 0;
       subtotal += (p * q);
@@ -749,9 +1033,9 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                   color: Color(0xFF1D1D1F),
                 ),
               ),
-              const Text(
-                "Date: 26 May 2026",
-                style: TextStyle(
+              Text(
+                "Date: ${DateTime.now().toString().split(' ').first}",
+                style: const TextStyle(
                   color: Color(0xFF86868B),
                   fontWeight: FontWeight.w600,
                 ),
@@ -842,7 +1126,7 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
           const SizedBox(height: 16),
 
           // รายการสินค้า
-          ...(project['products'] as List).asMap().entries.map((entry) {
+          ...(_editingItems).asMap().entries.map((entry) {
             int index = entry.key;
             var prod = entry.value;
             double price = double.tryParse(prod['price'].toString()) ?? 0.0;
@@ -857,9 +1141,9 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                     flex: 4,
                     child: _buildEditableField(
                       prod['name'].toString(),
-                      (val) => setState(
-                        () => project['products'][index]['name'] = val,
-                      ),
+                      (val) =>
+                          setState(() => _editingItems[index]['name'] = val),
+                      semanticLabel: "Document item description ${index + 1}",
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -868,9 +1152,11 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                     child: _buildEditableField(
                       qty.toString(),
                       (val) => setState(
-                        () => project['products'][index]['qty'] = val,
+                        () => _editingItems[index]['qty'] =
+                            int.tryParse(val) ?? 0,
                       ),
                       isNumber: true,
+                      semanticLabel: "Document item quantity ${index + 1}",
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -879,9 +1165,11 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                     child: _buildEditableField(
                       price.toString(),
                       (val) => setState(
-                        () => project['products'][index]['price'] = val,
+                        () => _editingItems[index]['price'] =
+                            double.tryParse(val) ?? 0.0,
                       ),
                       isNumber: true,
+                      semanticLabel: "Document item unit price ${index + 1}",
                     ),
                   ),
                   Expanded(
@@ -903,7 +1191,7 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                       size: 22,
                     ),
                     onPressed: () =>
-                        setState(() => project['products'].removeAt(index)),
+                        setState(() => _editingItems.removeAt(index)),
                   ),
                 ],
               ),
@@ -913,8 +1201,7 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
           const SizedBox(height: 8),
           InkWell(
             onTap: () => setState(
-              () =>
-                  project['products'].add({"name": "", "qty": 1, "price": 0.0}),
+              () => _editingItems.add({"name": "", "qty": 1, "price": 0.0}),
             ),
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -1016,7 +1303,7 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                     context,
                     project['customer'],
                     _activeDocTab,
-                    project['products'],
+                    _editingItems,
                   );
                 },
               ),
@@ -1026,13 +1313,135 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                 const Color(0xFF1D1D1F),
                 Colors.white,
                 icon: Icons.check_circle,
-                onTap: () {},
+                onTap: () => _saveAndIssueDocument(project),
               ),
             ],
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _saveAndIssueDocument(Map<String, dynamic> project) async {
+    if (_editingItems.isEmpty) {
+      _showErrorBanner("กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ");
+      return;
+    }
+
+    for (var it in _editingItems) {
+      final name = it['name']?.toString().trim() ?? '';
+      if (name.isEmpty) {
+        _showErrorBanner("กรุณากรอกชื่อสินค้าให้ครบถ้วน");
+        return;
+      }
+      final qty = int.tryParse(it['qty']?.toString() ?? '0') ?? 0;
+      if (qty < 1) {
+        _showErrorBanner("จำนวนสินค้าต้องมีค่าอย่างน้อย 1 ชิ้น");
+        return;
+      }
+      final price = double.tryParse(it['price']?.toString() ?? '-1.0') ?? -1.0;
+      if (price < 0) {
+        _showErrorBanner("ราคาสินค้าต้องไม่ต่ำกว่า 0 บาท");
+        return;
+      }
+    }
+
+    final int pId = project['db_id'];
+
+    final existingDoc = _documents.firstWhere(
+      (d) =>
+          d['project_id'] == pId &&
+          d['doc_type'] == _activeDocTab &&
+          d['status'] != 'Cancelled',
+      orElse: () => {},
+    );
+
+    final payload = {
+      'project_id': pId,
+      'doc_type': _activeDocTab,
+      'issue_date': DateTime.now().toString().split(' ').first,
+      'notes': 'Issued via Finance Portal',
+      'items': _editingItems
+          .map(
+            (it) => {
+              'item_name': it['name']?.toString().trim() ?? '',
+              'qty': int.tryParse(it['qty']?.toString() ?? '1') ?? 1,
+              'unit_price':
+                  double.tryParse(it['price']?.toString() ?? '0.0') ?? 0.0,
+            },
+          )
+          .toList(),
+    };
+
+    try {
+      if (existingDoc.isNotEmpty) {
+        final int docId = existingDoc['id'];
+        final response = await _api.put(
+          FinanceEndpoints.updateDocument(docId),
+          data: payload,
+        );
+        if (response.data['success'] == true) {
+          await _api.patch(
+            FinanceEndpoints.documentStatus(docId),
+            data: {'status': 'Sent'},
+          );
+          _showSuccessBanner("บันทึกการแก้ไขเอกสารสำเร็จ");
+          await _onProjectOrTabChanged(_selectedProjectId, _activeDocTab);
+        }
+      } else {
+        final response = await _api.post(
+          FinanceEndpoints.storeDocument,
+          data: payload,
+        );
+        if (response.data['success'] == true) {
+          final int docId = response.data['data']['id'];
+          await _api.patch(
+            FinanceEndpoints.documentStatus(docId),
+            data: {'status': 'Sent'},
+          );
+          _showSuccessBanner("สร้างและออกเอกสารเรียบร้อย");
+          await _onProjectOrTabChanged(_selectedProjectId, _activeDocTab);
+        }
+      }
+    } catch (e) {
+      debugPrint("Error saving document: $e");
+      _showErrorBanner("เกิดข้อผิดพลาดในการบันทึกเอกสาร");
+    }
+  }
+
+  Future<void> _confirmDepositPayment(
+    Map<String, dynamic> project,
+    double amount,
+  ) async {
+    final int pId = project['db_id'];
+
+    final payload = {
+      'project_id': pId,
+      'doc_type': 'DP',
+      'issue_date': DateTime.now().toString().split(' ').first,
+      'notes': 'Deposit payment verified',
+      'items': [
+        {
+          'item_name': 'Deposit Payment (มัดจำ)',
+          'qty': 1,
+          'unit_price': amount,
+        },
+      ],
+    };
+
+    try {
+      final response = await _api.post(
+        FinanceEndpoints.storeDocument,
+        data: payload,
+      );
+      if (response.data['success'] == true) {
+        _showSuccessBanner("ยืนยันการรับชำระเงินมัดจำเรียบร้อย");
+        await _onProjectOrTabChanged(_selectedProjectId, _activeDocTab);
+      }
+    } catch (e) {
+      debugPrint("Error confirming deposit payment: $e");
+      _showErrorBanner("เกิดข้อผิดพลาดในการบันทึกการชำระเงิน");
+    }
   }
 
   // Dialog สำหรับ Auto-fill ราคาจากซัพพลายเออร์
@@ -1124,8 +1533,10 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                     ),
                     const SizedBox(height: 8),
                     _buildEditableField(
-                      "${project['deposit_amount']}",
-                      (val) {},
+                      _depositAmountInput.toString(),
+                      (val) => setState(
+                        () => _depositAmountInput = double.tryParse(val) ?? 0.0,
+                      ),
                       isNumber: true,
                     ),
                   ],
@@ -1141,7 +1552,10 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                       style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
-                    _buildEditableField("26 May 2026", (val) {}),
+                    _buildEditableField(
+                      DateTime.now().toString().split(' ').first,
+                      (val) {},
+                    ),
                   ],
                 ),
               ),
@@ -1153,7 +1567,9 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
               "Confirm Payment",
               const Color(0xFF1D1D1F),
               Colors.white,
-              onTap: () {},
+              onTap: () {
+                _confirmDepositPayment(project, _depositAmountInput);
+              },
             ),
           ),
         ],
@@ -1522,7 +1938,106 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
     );
   }
 
-  Widget _buildFileUploadCard(String title, String subtitle, IconData icon) {
+  Future<void> _uploadPO(Map<String, dynamic> project) async {
+    final pId = project['db_id'] ?? project['id'];
+    if (pId == null) return;
+
+    try {
+      final FilePickerResult? result = await FilePicker.pickFiles(
+        type: FileType.any,
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) return;
+
+      setState(() => _isUploadingPO = true);
+
+      final platformFile = result.files.first;
+      final fileBytes = platformFile.bytes;
+      final fileName = platformFile.name;
+
+      if (fileBytes == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("ไม่สามารถอ่านข้อมูลไฟล์ได้"),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+        return;
+      }
+
+      // Prepare FormData
+      final formData = dio_pkg.FormData.fromMap({
+        'file': dio_pkg.MultipartFile.fromBytes(fileBytes, filename: fileName),
+      });
+
+      final response = await _api.post(
+        '/projects/$pId/upload-po',
+        data: formData,
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("อัปโหลดใบสั่งซื้อ $fileName สำเร็จ!"),
+            backgroundColor: const Color(0xFF4A9062),
+          ),
+        );
+        // Refresh project list and details to show new PO path
+        await _fetchData();
+      } else {
+        throw Exception("Server returned ${response.statusCode}");
+      }
+    } catch (e) {
+      debugPrint("Error uploading PO file: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("เกิดข้อผิดพลาดในการอัปโหลด: $e"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      setState(() => _isUploadingPO = false);
+    }
+  }
+
+  Future<void> _viewPO(Map<String, dynamic> project) async {
+    final String poUrl = project['po_file_path'] ?? '';
+    if (poUrl.isEmpty) return;
+
+    // Get the base API URL to construct the full host URL
+    final String baseUrl =
+        ApiConfig.baseUrl; // e.g. 'http://localhost:8000/api'
+    final String hostUrl = baseUrl.endsWith('/api')
+        ? baseUrl.substring(0, baseUrl.length - 4)
+        : baseUrl; // e.g. 'http://localhost:8000'
+
+    final String fullUrl = poUrl.startsWith('http') ? poUrl : '$hostUrl$poUrl';
+
+    try {
+      await openUrl(fullUrl);
+    } catch (e) {
+      debugPrint("Error launching PO URL: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("ไม่สามารถเปิดลิงก์รูปภาพได้: $e"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Widget _buildFileUploadCard(
+    Map<String, dynamic> project,
+    String title,
+    String subtitle,
+    IconData icon,
+  ) {
+    final hasPo =
+        project['po_file_path'] != null &&
+        project['po_file_path'].toString().isNotEmpty;
+    final poName = project['po_file_name'] ?? 'Client_PO.pdf';
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -1545,6 +2060,27 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                   color: Color(0xFF1D1D1F),
                 ),
               ),
+              if (hasPo) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE6F4EA),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    "Uploaded",
+                    style: TextStyle(
+                      color: Color(0xFF137333),
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 4),
@@ -1553,31 +2089,133 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
             style: const TextStyle(fontSize: 12, color: Color(0xFF86868B)),
           ),
           const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-            ),
-            child: Column(
-              children: const [
-                Icon(
-                  Icons.cloud_upload_outlined,
-                  color: Color(0xFF64748B),
-                  size: 24,
+          InkWell(
+            onTap: _isUploadingPO
+                ? null
+                : (hasPo ? () => _viewPO(project) : () => _uploadPO(project)),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              decoration: BoxDecoration(
+                color: hasPo
+                    ? const Color(0xFFF1F8F5)
+                    : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: hasPo
+                      ? const Color(0xFF34A853).withOpacity(0.3)
+                      : const Color(0xFFE2E8F0),
+                  width: hasPo ? 1.5 : 1,
                 ),
-                SizedBox(height: 8),
-                Text(
-                  "Click to upload file",
-                  style: TextStyle(
-                    color: Color(0xFF64748B),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
+              ),
+              child: _isUploadingPO
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Color(0xFF5B7BD5),
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          "Uploading...",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                      ],
+                    )
+                  : hasPo
+                  ? Column(
+                      children: [
+                        const Icon(
+                          Icons.check_circle_outline_rounded,
+                          color: Color(0xFF137333),
+                          size: 28,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          poName,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF137333),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TextButton.icon(
+                              onPressed: () => _viewPO(project),
+                              icon: const Icon(
+                                Icons.remove_red_eye_outlined,
+                                size: 16,
+                                color: Color(0xFF5B7BD5),
+                              ),
+                              label: const Text(
+                                "View File",
+                                style: TextStyle(
+                                  color: Color(0xFF5B7BD5),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 1,
+                              height: 12,
+                              color: Colors.grey.withOpacity(0.3),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              onPressed: () => _uploadPO(project),
+                              icon: const Icon(
+                                Icons.upload_file_outlined,
+                                size: 16,
+                                color: Color(0xFFD97781),
+                              ),
+                              label: const Text(
+                                "Change",
+                                style: TextStyle(
+                                  color: Color(0xFFD97781),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    )
+                  : Column(
+                      children: const [
+                        Icon(
+                          Icons.cloud_upload_outlined,
+                          color: Color(0xFF64748B),
+                          size: 24,
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          "Click to upload file",
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
           ),
         ],
@@ -1589,6 +2227,7 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
     String initialValue,
     Function(String) onChanged, {
     bool isNumber = false,
+    String? semanticLabel,
   }) {
     return SizedBox(
       height: 44,
@@ -1598,6 +2237,7 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
         onChanged: onChanged,
         style: const TextStyle(fontSize: 14),
         decoration: InputDecoration(
+          labelText: semanticLabel,
           filled: true,
           fillColor: const Color(0xFFF4F5F7),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14),
@@ -1620,7 +2260,7 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
         : (isCompleted ? const Color(0xFF4A9062) : const Color(0xFF86868B));
     return Expanded(
       child: InkWell(
-        onTap: () => setState(() => _activeDocTab = id),
+        onTap: () => _onProjectOrTabChanged(_selectedProjectId, id),
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1892,9 +2532,18 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
     Map<String, dynamic> project,
   ) {
     String title = "";
-    String category = "Cost of Goods (COGS)";
+    int? selectedSupplierId = _suppliers.isNotEmpty
+        ? _suppliers[0]['id']
+        : null;
+    String billType = "Deposit";
     double amount = 0.0;
-    String status = "Pending";
+    String currency = "THB";
+    String dueMonth = DateTime.now()
+        .toString()
+        .split(' ')
+        .first
+        .substring(0, 7);
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -1904,151 +2553,212 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
               borderRadius: BorderRadius.circular(24),
             ),
             title: const Text(
-              "Record New Expense",
+              "Record New Expense (Supplier Bill)",
               style: TextStyle(fontWeight: FontWeight.bold),
             ),
             content: SizedBox(
               width: 400,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Expense Title",
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    decoration: InputDecoration(
-                      hintText: "เช่น ค่าขนส่งทางเรือ, มัดจำโรงงาน",
-                      filled: true,
-                      fillColor: const Color(0xFFF4F5F7),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Description / Product Name",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    onChanged: (val) => title = val,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Category",
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: category,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: const Color(0xFFF4F5F7),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    items:
-                        [
-                              "Cost of Goods (COGS)",
-                              "Shipping & Logistics",
-                              "Tax & Customs",
-                              "Sample & Prototype",
-                              "Operation",
-                              "Others",
-                            ]
-                            .map(
-                              (s) => DropdownMenuItem(value: s, child: Text(s)),
-                            )
-                            .toList(),
-                    onChanged: (val) => setDialogState(() => category = val!),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Amount THB",
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      hintText: "0.00",
-                      prefixIcon: const Icon(Icons.money),
-                      filled: true,
-                      fillColor: const Color(0xFFF4F5F7),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onChanged: (val) => amount = double.tryParse(val) ?? 0.0,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    "Payment Status",
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => setDialogState(() => status = "Pending"),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: status == "Pending"
-                                  ? const Color(0xFFFDE2E4).withOpacity(0.5)
-                                  : const Color(0xFFF4F5F7),
-                              border: Border.all(
-                                color: status == "Pending"
-                                    ? const Color(0xFFD97781)
-                                    : Colors.transparent,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                "Pending",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFD97781),
-                                ),
-                              ),
-                            ),
-                          ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      decoration: InputDecoration(
+                        hintText: "เช่น มัดจำค่าสินค้ากระเป๋า",
+                        filled: true,
+                        fillColor: const Color(0xFFF4F5F7),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: InkWell(
-                          onTap: () => setDialogState(() => status = "Paid"),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: status == "Paid"
-                                  ? const Color(0xFFB7E4C7).withOpacity(0.3)
-                                  : const Color(0xFFF4F5F7),
-                              border: Border.all(
-                                color: status == "Paid"
-                                    ? const Color(0xFF4A9062)
-                                    : Colors.transparent,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                "Paid",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF4A9062),
-                                ),
-                              ),
-                            ),
-                          ),
+                      onChanged: (val) => title = val,
+                    ),
+                    const SizedBox(height: 16),
+
+                    const Text(
+                      "Supplier",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<int>(
+                      value: selectedSupplierId,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: const Color(0xFFF4F5F7),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
                         ),
                       ),
-                    ],
-                  ),
-                ],
+                      items: _suppliers
+                          .map(
+                            (s) => DropdownMenuItem<int>(
+                              value: s['id'],
+                              child: Text(s['name'] ?? ''),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (val) =>
+                          setDialogState(() => selectedSupplierId = val),
+                    ),
+                    const SizedBox(height: 16),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Bill Type",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                value: billType,
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: const Color(0xFFF4F5F7),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                                items: ["Deposit", "Balance", "Full Payment"]
+                                    .map(
+                                      (s) => DropdownMenuItem(
+                                        value: s,
+                                        child: Text(s),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (val) =>
+                                    setDialogState(() => billType = val!),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Currency",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                value: currency,
+                                decoration: InputDecoration(
+                                  filled: true,
+                                  fillColor: const Color(0xFFF4F5F7),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                                items: ["THB", "USD"]
+                                    .map(
+                                      (s) => DropdownMenuItem(
+                                        value: s,
+                                        child: Text(s),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (val) =>
+                                    setDialogState(() => currency = val!),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Amount",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextFormField(
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  hintText: "0.00",
+                                  filled: true,
+                                  fillColor: const Color(0xFFF4F5F7),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                                onChanged: (val) =>
+                                    amount = double.tryParse(val) ?? 0.0,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                "Due Month (YYYY-MM)",
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextFormField(
+                                initialValue: dueMonth,
+                                decoration: InputDecoration(
+                                  hintText: "YYYY-MM",
+                                  filled: true,
+                                  fillColor: const Color(0xFFF4F5F7),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                                onChanged: (val) => dueMonth = val,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
             actions: [
@@ -2060,20 +2770,34 @@ class _GeneratePIScreenState extends State<GeneratePIScreen> {
                 ),
               ),
               ElevatedButton(
-                onPressed: () {
-                  if (title.isNotEmpty && amount > 0) {
-                    setState(() {
-                      if (project['outbound_expenses'] == null) {
-                        project['outbound_expenses'] = [];
+                onPressed: () async {
+                  if (title.isNotEmpty &&
+                      amount > 0 &&
+                      selectedSupplierId != null) {
+                    final int pId = project['db_id'];
+                    try {
+                      final response = await _api.post(
+                        '/suppliers/$selectedSupplierId/bills',
+                        data: {
+                          'project_id': pId,
+                          'product_name': title,
+                          'bill_type': billType,
+                          'amount': amount,
+                          'currency': currency,
+                          'due_month': dueMonth,
+                        },
+                      );
+                      if (response.data['success'] == true) {
+                        _showSuccessBanner("บันทึกค่าใช้จ่าย Outbound สำเร็จ");
+                        await _onProjectOrTabChanged(
+                          _selectedProjectId,
+                          _activeDocTab,
+                        );
                       }
-                      project['outbound_expenses'].add({
-                        "title": title,
-                        "category": category,
-                        "amount": amount,
-                        "status": status,
-                        "date": "Today",
-                      });
-                    });
+                    } catch (e) {
+                      debugPrint("Error recording expense: $e");
+                      _showErrorBanner("เกิดข้อผิดพลาดในการบันทึกค่าใช้จ่าย");
+                    }
                     Navigator.pop(context);
                   }
                 },

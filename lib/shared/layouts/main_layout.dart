@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../core/auth/auth_service.dart';
 import '../../modules/auth/login_screen.dart';
 import '../../modules/containers/containers_screen.dart';
 import '../../modules/dashboard/dashboard_screen.dart';
@@ -212,8 +213,10 @@ class _MainLayoutState extends State<MainLayout> {
                 ),
               ),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(ctx);
+                  await AuthService().logout();
+                  if (!context.mounted) return;
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../core/api/api_client.dart';
+import '../../core/api/api_endpoints.dart';
+import '../../core/api/api_error_handler.dart';
 import '../orders/project_list_screen.dart';
 import '../orders/create_project_screen.dart';
 
@@ -10,8 +13,244 @@ class CreateCustomerScreen extends StatefulWidget {
 }
 
 class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
+  // API client
+  final ApiClient _api = ApiClient();
+  bool _isLoadingList = false;
+  bool _isLoadingDetail = false;
+  bool _isSaving = false;
+  List<dynamic> _customers = [];
+  Map<String, dynamic>? _selectedCustomerDetail;
+  int? _selectedCustomerId;
+  Map<String, dynamic>? _selectedCustomerStats;
+
+  // controllers for form fields
+  final _nameController = TextEditingController();
+  final _taxIdController = TextEditingController();
+  final _billingAddressController = TextEditingController();
+  final _internalNoteController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCustomers();
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _taxIdController.dispose();
+    _billingAddressController.dispose();
+    _internalNoteController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _fetchCustomers() async {
+    setState(() {
+      _isLoadingList = true;
+    });
+    try {
+      final response = await _api.get(CustomerEndpoints.index, queryParameters: {
+        if (_searchText.isNotEmpty) 'search': _searchText,
+        if (_selectedCustomerStatusTab != "All") 'status': _selectedCustomerStatusTab,
+      });
+      final body = response.data;
+      if (body['success'] == true) {
+        setState(() {
+          _customers = body['data'];
+          if (_customers.isNotEmpty) {
+            if (_selectedCustomerId == null) {
+              _selectedCustomerId = _customers[0]['id'];
+              _selectedCustomerName = _customers[0]['name'];
+              _fetchCustomerDetail(_selectedCustomerId!);
+            } else {
+              final exists = _customers.any((c) => c['id'] == _selectedCustomerId);
+              if (!exists) {
+                _selectedCustomerId = _customers[0]['id'];
+                _selectedCustomerName = _customers[0]['name'];
+                _fetchCustomerDetail(_selectedCustomerId!);
+              }
+            }
+          } else {
+            _selectedCustomerId = null;
+            _selectedCustomerName = "";
+            _selectedCustomerDetail = null;
+            _selectedCustomerStats = null;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching customers: $e");
+    } finally {
+      setState(() {
+        _isLoadingList = false;
+      });
+    }
+  }
+
+  Future<void> _fetchCustomerDetail(int id) async {
+    setState(() {
+      _isLoadingDetail = true;
+    });
+    try {
+      final detailResponse = await _api.get(CustomerEndpoints.show(id));
+      final statsResponse = await _api.get(CustomerEndpoints.stats(id));
+
+      if (detailResponse.data['success'] == true) {
+        setState(() {
+          _selectedCustomerDetail = detailResponse.data['data'];
+          if (statsResponse.data['success'] == true) {
+            _selectedCustomerStats = statsResponse.data['data'];
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching customer detail: $e");
+    } finally {
+      setState(() {
+        _isLoadingDetail = false;
+      });
+    }
+  }
+
+  void _clearForm() {
+    _nameController.clear();
+    _taxIdController.clear();
+    _billingAddressController.clear();
+    _internalNoteController.clear();
+    setState(() {
+      _selectedCustomerTier = 0; // SME
+      _selectedLeadSource = null;
+      _otherLeadSourceText = "";
+      _selectedBranch = null;
+      _selectedIndustry = null;
+      _isShippingSameAsBilling = false;
+      _formContacts.clear();
+      _formContacts.add({
+        "name": "",
+        "role": null,
+        "phone": "",
+        "email": "",
+        "line": "",
+        "other_chat": "",
+      });
+      _formShippingAddresses.clear();
+    });
+  }
+
+  Future<void> _saveCustomer() async {
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final String companyName = _nameController.text.trim();
+      final String taxId = _taxIdController.text.trim();
+      final String billingAddress = _billingAddressController.text.trim();
+      final String internalNote = _internalNoteController.text.trim();
+
+      if (companyName.isEmpty) {
+        throw Exception("กรุณากรอกชื่อบริษัท");
+      }
+
+      String typeStr = "SME";
+      if (_selectedCustomerTier == 1) typeStr = "Mid-Market";
+      if (_selectedCustomerTier == 2) typeStr = "Enterprise";
+
+      String? leadSourceValue = _selectedLeadSource;
+      if (leadSourceValue == "Referral (บอกต่อ)") leadSourceValue = "Referral";
+      if (leadSourceValue == "Exhibition / Event") leadSourceValue = "Exhibition";
+      if (leadSourceValue == "Others") leadSourceValue = "Other";
+
+      final response = await _api.post(CustomerEndpoints.store, data: {
+        'name': companyName,
+        'type': typeStr,
+        'status': 'Active',
+        'tax_id': taxId.isNotEmpty ? taxId : null,
+        'branch': _selectedBranch,
+        'industry': _selectedIndustry,
+        'lead_source': leadSourceValue,
+        'internal_note': internalNote.isNotEmpty ? internalNote : null,
+        'billing_address': billingAddress.isNotEmpty ? billingAddress : null,
+      });
+
+      final body = response.data;
+      if (body['success'] == true) {
+        final newCustomer = body['data'];
+        final int customerId = newCustomer['id'];
+
+        for (var contact in _formContacts) {
+          final String name = contact['name'] ?? "";
+          if (name.isNotEmpty) {
+            await _api.post(CustomerEndpoints.contacts(customerId), data: {
+              'name': name,
+              'role': contact['role'],
+              'phone': contact['phone'],
+              'email': contact['email'],
+              'line_id': contact['line'],
+              'other_chat': contact['other_chat'],
+              'is_primary': _formContacts.indexOf(contact) == 0,
+            });
+          }
+        }
+
+        if (!_isShippingSameAsBilling) {
+          for (var addr in _formShippingAddresses) {
+            final String label = addr['label'] ?? "";
+            final String address = addr['address'] ?? "";
+            if (label.isNotEmpty && address.isNotEmpty) {
+              await _api.post(CustomerEndpoints.addresses(customerId), data: {
+                'label': label,
+                'address': address,
+                'is_default': _formShippingAddresses.indexOf(addr) == 0,
+              });
+            }
+          }
+        }
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("สร้างข้อมูลลูกค้า '${newCustomer['name']}' เรียบร้อยแล้ว!"),
+            backgroundColor: const Color(0xFF4A9062),
+          ),
+        );
+
+        _searchText = "";
+        _selectedCustomerId = customerId;
+        _selectedCustomerName = newCustomer['name'];
+        _isCreatingMode = false;
+        await _fetchCustomers();
+      } else {
+        throw Exception(body['error']?['message'] ?? 'บันทึกข้อมูลไม่สำเร็จ');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("เกิดข้อผิดพลาด"),
+          content: Text(ApiErrorHandler.parseError(e)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("ตกลง"),
+            )
+          ],
+        ),
+      );
+    } finally {
+      setState(() {
+        _isSaving = false;
+      });
+    }
+  }
+
   // สถานะการควบคุมหน้าจอ
   bool _isCreatingMode = false;
+  bool _isEditingMode = false;
+  final List<int> _deletedContactIds = [];
+  final List<int> _deletedAddressIds = [];
   String _searchText = "";
   String _selectedCustomerName = "บริษัท สยามพารากอน จำกัด";
 
@@ -221,22 +460,8 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
     "Other",
   ];
 
-  List<Map<String, dynamic>> _getFilteredCustomers() {
-    var result = _oldCustomers;
-    if (_selectedCustomerStatusTab != "All") {
-      result = result
-          .where((c) => c['customer_status'] == _selectedCustomerStatusTab)
-          .toList();
-    }
-    if (_searchText.isNotEmpty) {
-      String searchLower = _searchText.toLowerCase();
-      result = result
-          .where(
-            (c) => c['name'].toString().toLowerCase().contains(searchLower),
-          )
-          .toList();
-    }
-    return result;
+  List<dynamic> _getFilteredCustomers() {
+    return _customers;
   }
 
   @override
@@ -244,18 +469,61 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
     final filteredCustomers = _getFilteredCustomers();
 
     Map<String, dynamic>? selectedCustomer;
-    if (!_isCreatingMode && filteredCustomers.isNotEmpty) {
-      if (!filteredCustomers.any((c) => c['name'] == _selectedCustomerName)) {
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => setState(
-            () => _selectedCustomerName = filteredCustomers[0]['name'],
-          ),
-        );
-      }
-      selectedCustomer = filteredCustomers.firstWhere(
-        (c) => c['name'] == _selectedCustomerName,
-        orElse: () => filteredCustomers[0],
-      );
+    if (!_isCreatingMode && _selectedCustomerDetail != null) {
+      final stats = {
+        "revenue_lifetime": "฿${((_selectedCustomerStats?['revenue_lifetime'] ?? 0) / 1000000).toStringAsFixed(1)}M",
+        "revenue_this_year": "฿${((_selectedCustomerStats?['revenue_lifetime'] ?? 0) * 0.4 / 1000).toStringAsFixed(0)}K",
+        "revenue_last_year": "฿${((_selectedCustomerStats?['revenue_lifetime'] ?? 0) * 0.6 / 1000).toStringAsFixed(0)}K",
+        "projects_completed": _selectedCustomerStats?['projects_completed'] ?? 0,
+        "projects_active": _selectedCustomerStats?['projects_active'] ?? 0,
+        "payment_on_time": _selectedCustomerStats?['payment_on_time'] ?? 100,
+        "payment_total": 100,
+        "has_outstanding": _selectedCustomerStats?['has_outstanding'] ?? false,
+        "last_paid": "N/A",
+        "customer_since": _selectedCustomerStats?['customer_since'] ?? "N/A",
+        "avg_projects_year": 0,
+      };
+
+      final List<dynamic> dbProjects = _selectedCustomerDetail!['projects'] ?? [];
+      final List<Map<String, dynamic>> mappedProjects = dbProjects.map((p) {
+        return {
+          "id": p['project_code'] ?? "PRJ-${p['id']}",
+          "name": (p['product_items'] != null && (p['product_items'] as List).isNotEmpty)
+              ? p['product_items'][0]['name']
+              : "โปรเจกต์ #${p['id']}",
+          "status": p['status'] ?? "Pending",
+          "date_created": p['created_at'] != null ? p['created_at'].toString().split('T')[0] : "-",
+          "target_date": p['target_date'] ?? "-",
+        };
+      }).toList();
+
+      final List<dynamic> dbContacts = _selectedCustomerDetail!['contacts'] ?? [];
+      final List<Map<String, dynamic>> mappedContacts = dbContacts.map((c) {
+        return {
+          "name": c['name'] ?? "",
+          "role": c['role'] ?? "-",
+          "phone": c['phone'] ?? "-",
+          "email": c['email'] ?? "-",
+          "line": c['line_id'] ?? "-",
+          "other_chat": c['other_chat'] ?? "-",
+        };
+      }).toList();
+
+      final List<dynamic> dbAddresses = _selectedCustomerDetail!['shipping_addresses'] ?? [];
+      final List<Map<String, dynamic>> mappedAddresses = dbAddresses.map((a) {
+        return {
+          "label": a['label'] ?? "",
+          "address": a['address'] ?? "",
+        };
+      }).toList();
+
+      selectedCustomer = {
+        ..._selectedCustomerDetail!,
+        "stats": stats,
+        "projects": mappedProjects,
+        "contacts": mappedContacts,
+        "shipping_addresses": mappedAddresses,
+      };
     }
 
     return Scaffold(
@@ -296,10 +564,13 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                           color: Color(0xFF2563EB),
                         ),
                         tooltip: "Create New Customer",
-                        onPressed: () => setState(() {
-                          _isCreatingMode = true;
-                          _isListCollapsed = false;
-                        }),
+                        onPressed: () {
+                          _clearForm();
+                          setState(() {
+                            _isCreatingMode = true;
+                            _isListCollapsed = false;
+                          });
+                        },
                       ),
                     ],
                   )
@@ -373,7 +644,10 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                           vertical: 8,
                         ),
                         child: InkWell(
-                          onTap: () => setState(() => _isCreatingMode = true),
+                          onTap: () {
+                            _clearForm();
+                            setState(() => _isCreatingMode = true);
+                          },
                           borderRadius: BorderRadius.circular(12),
                           child: Container(
                             width: double.infinity,
@@ -412,7 +686,10 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                           vertical: 8,
                         ),
                         child: TextField(
-                          onChanged: (val) => setState(() => _searchText = val),
+                          onChanged: (val) {
+                            setState(() => _searchText = val);
+                            _fetchCustomers();
+                          },
                           decoration: InputDecoration(
                             hintText: "ค้นหาชื่อบริษัท...",
                             prefixIcon: const Icon(
@@ -450,15 +727,20 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                   final c = filteredCustomers[index];
                                   final isSelected =
                                       !_isCreatingMode &&
-                                      _selectedCustomerName == c['name'];
+                                      _selectedCustomerId == c['id'];
                                   final bool isActiveCustomer =
-                                      c['active_projects_count'] > 0;
+                                      (c['status'] ?? 'Active') == 'Active';
 
                                   return InkWell(
-                                    onTap: () => setState(() {
-                                      _isCreatingMode = false;
-                                      _selectedCustomerName = c['name'];
-                                    }),
+                                    onTap: () {
+                                      setState(() {
+                                        _isCreatingMode = false;
+                                        _isEditingMode = false;
+                                        _selectedCustomerId = c['id'];
+                                        _selectedCustomerName = c['name'];
+                                      });
+                                      _fetchCustomerDetail(c['id']);
+                                    },
                                     borderRadius: BorderRadius.circular(16),
                                     child: Container(
                                       margin: const EdgeInsets.only(bottom: 8),
@@ -486,7 +768,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                             children: [
                                               Expanded(
                                                 child: Text(
-                                                  c['name'],
+                                                  c['name'] ?? "",
                                                   style: TextStyle(
                                                     fontWeight: FontWeight.w700,
                                                     fontSize: 15,
@@ -543,14 +825,20 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
           Expanded(
             child: _isCreatingMode
                 ? _buildCreateCustomerForm()
-                : (selectedCustomer == null
-                      ? const Center(
-                          child: Text(
-                            "กรุณาเลือกลูกค้า",
-                            style: TextStyle(color: Color(0xFF86868B)),
-                          ),
-                        )
-                      : _buildCustomerProfile(selectedCustomer)),
+                : (_isLoadingDetail
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                        ),
+                      )
+                    : (selectedCustomer == null
+                        ? const Center(
+                            child: Text(
+                              "กรุณาเลือกลูกค้า",
+                              style: TextStyle(color: Color(0xFF86868B)),
+                            ),
+                          )
+                        : _buildCustomerProfile(selectedCustomer))),
           ),
         ],
       ),
@@ -585,65 +873,67 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: customer['type'] == 'Enterprise'
-                              ? const Color(0xFFAEC4FA).withOpacity(0.2)
-                              : const Color(0xFFB7E4C7).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          customer['type'],
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
                             color: customer['type'] == 'Enterprise'
-                                ? const Color(0xFF5B7BD5)
-                                : const Color(0xFF4A9062),
+                                ? const Color(0xFFAEC4FA).withOpacity(0.2)
+                                : const Color(0xFFB7E4C7).withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            customer['type'],
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: customer['type'] == 'Enterprise'
+                                  ? const Color(0xFF5B7BD5)
+                                  : const Color(0xFF4A9062),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFEAE4F2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          "Lead: ${customer['lead_source']}",
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF86868B),
-                            fontWeight: FontWeight.bold,
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEAE4F2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            "Lead: ${customer['lead_source']}",
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF86868B),
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    customer['name'],
-                    style: const TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1D1D1F),
-                      letterSpacing: -0.5,
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    Text(
+                      customer['name'],
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF1D1D1F),
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               Row(
                 children: [
@@ -652,7 +942,85 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                     Colors.white,
                     const Color(0xFF1D1D1F),
                     isOutlined: true,
-                    onTap: () {},
+                    onTap: () {
+                      if (_selectedCustomerDetail == null) return;
+                      if (_selectedCustomerId != _selectedCustomerDetail!['id']) return;
+
+                      // 1. Populate controller values
+                      _nameController.text = _selectedCustomerDetail!['name'] ?? "";
+                      _taxIdController.text = _selectedCustomerDetail!['tax_id'] ?? "";
+                      _billingAddressController.text = _selectedCustomerDetail!['billing_address'] ?? _selectedCustomerDetail!['address'] ?? "";
+                      _internalNoteController.text = _selectedCustomerDetail!['internal_note'] ?? "";
+
+                      // 2. Set dropdown and select values
+                      _selectedBranch = _selectedCustomerDetail!['branch'];
+                      _selectedIndustry = _selectedCustomerDetail!['industry'];
+
+                      String? source = _selectedCustomerDetail!['lead_source'];
+                      if (source == "Referral") source = "Referral (บอกต่อ)";
+                      if (source == "Exhibition") source = "Exhibition / Event";
+                      if (source == "Other") source = "Others";
+                      _selectedLeadSource = source;
+
+                      String type = _selectedCustomerDetail!['type'] ?? "SME";
+                      if (type == "Mid-Market") {
+                        _selectedCustomerTier = 1;
+                      } else if (type == "Enterprise") {
+                        _selectedCustomerTier = 2;
+                      } else {
+                        _selectedCustomerTier = 0;
+                      }
+
+                      // 3. Clear/set contacts and addresses
+                      _formContacts.clear();
+                      final dbContacts = _selectedCustomerDetail!['contacts'] ?? [];
+                      if (dbContacts.isNotEmpty) {
+                        for (var c in dbContacts) {
+                          _formContacts.add({
+                            'id': c['id'],
+                            'name': c['name'] ?? "",
+                            'role': c['role'],
+                            'phone': c['phone'] ?? "",
+                            'email': c['email'] ?? "",
+                            'line': c['line_id'] ?? "",
+                            'other_chat': c['other_chat'] ?? "",
+                          });
+                        }
+                      } else {
+                        _formContacts.add({
+                          'name': "",
+                          'role': null,
+                          'phone': "",
+                          'email': "",
+                          'line': "",
+                          'other_chat': "",
+                        });
+                      }
+
+                      _formShippingAddresses.clear();
+                      final dbAddresses = _selectedCustomerDetail!['shipping_addresses'] ?? [];
+                      if (dbAddresses.isNotEmpty) {
+                        _isShippingSameAsBilling = false;
+                        for (var a in dbAddresses) {
+                          _formShippingAddresses.add({
+                            'id': a['id'],
+                            'label': a['label'] ?? "",
+                            'address': a['address'] ?? "",
+                          });
+                        }
+                      } else {
+                        _isShippingSameAsBilling = true;
+                      }
+
+                      // 4. Initialize deleted lists
+                      _deletedContactIds.clear();
+                      _deletedAddressIds.clear();
+
+                      setState(() {
+                        _isEditingMode = true;
+                        _isCreatingMode = true;
+                      });
+                    },
                   ),
                   const SizedBox(width: 16),
                   _buildButton(
@@ -704,12 +1072,14 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                 color: Color(0xFF86868B),
                               ),
                               SizedBox(width: 8),
-                              Text(
-                                "Company Information",
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1D1D1F),
+                              Expanded(
+                                child: Text(
+                                  "Company Information",
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1D1D1F),
+                                  ),
                                 ),
                               ),
                             ],
@@ -896,12 +1266,14 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                       color: Color(0xFF86868B),
                                     ),
                                     SizedBox(width: 8),
-                                    Text(
-                                      "Locations & Addresses",
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF1D1D1F),
+                                    Expanded(
+                                      child: Text(
+                                        "Locations & Addresses",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF1D1D1F),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -1012,12 +1384,14 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                       color: Color(0xFFD97706),
                                     ),
                                     SizedBox(width: 8),
-                                    Text(
-                                      "Internal Notes",
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF92400E),
+                                    Expanded(
+                                      child: Text(
+                                        "Internal Notes",
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF92400E),
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -1371,9 +1745,9 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Create New Customer",
-                    style: TextStyle(
+                  Text(
+                    _isEditingMode ? "Edit Customer Details" : "Create New Customer",
+                    style: const TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF1D1D1F),
@@ -1381,9 +1755,11 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    "เพิ่มข้อมูลบริษัทและช่องทางการติดต่อสำหรับ CRM",
-                    style: TextStyle(fontSize: 16, color: Color(0xFF86868B)),
+                  Text(
+                    _isEditingMode
+                        ? "แก้ไขรายละเอียดข้อมูลของบริษัทและผู้ติดต่อ"
+                        : "เพิ่มข้อมูลบริษัทและช่องทางการติดต่อสำหรับ CRM",
+                    style: const TextStyle(fontSize: 16, color: Color(0xFF86868B)),
                   ),
                 ],
               ),
@@ -1398,10 +1774,12 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                   ),
                   const SizedBox(width: 16),
                   _buildButton(
-                    "Save Customer",
+                    _isEditingMode ? "Update Customer" : "Save Customer",
                     const Color(0xFF2563EB),
                     Colors.white,
-                    onTap: () => _confirmSaveCreation(context),
+                    onTap: () => _isEditingMode
+                        ? _confirmSaveEdit(context)
+                        : _confirmSaveCreation(context),
                   ),
                 ],
               ),
@@ -1422,6 +1800,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                       child: _buildInputField(
                         "Company Name / ชื่อบริษัท *",
                         "เช่น บริษัท พีพีเอ็น จำกัด",
+                        controller: _nameController,
                       ),
                     ),
                     const SizedBox(width: 24),
@@ -1445,6 +1824,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                         "Tax ID / เลขประจำตัวผู้เสียภาษี *",
                         "X-XXXX-XXXXX-XX-X",
                         isNumber: true,
+                        controller: _taxIdController,
                       ),
                     ),
                     const SizedBox(width: 24),
@@ -1595,9 +1975,12 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                   color: Color(0xFFEF4444),
                                   size: 20,
                                 ),
-                                onPressed: () => setState(
-                                  () => _formContacts.removeAt(index),
-                                ),
+                                onPressed: () {
+                                  if (contact['id'] != null) {
+                                    _deletedContactIds.add(contact['id'] as int);
+                                  }
+                                  setState(() => _formContacts.removeAt(index));
+                                },
                                 tooltip: "Remove Contact",
                               ),
                           ],
@@ -1609,6 +1992,8 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                               child: _buildInputField(
                                 "Full Name / ชื่อ-นามสกุล *",
                                 "ชื่อผู้ติดต่อ",
+                                initialValue: contact['name'],
+                                onChanged: (val) => contact['name'] = val,
                               ),
                             ),
                             const SizedBox(width: 24),
@@ -1632,6 +2017,8 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                 "08X-XXX-XXXX",
                                 isNumber: true,
                                 icon: Icons.phone,
+                                initialValue: contact['phone'],
+                                onChanged: (val) => contact['phone'] = val,
                               ),
                             ),
                             const SizedBox(width: 24),
@@ -1640,6 +2027,8 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                 "Email Address *",
                                 "email@company.com",
                                 icon: Icons.email_outlined,
+                                initialValue: contact['email'],
+                                onChanged: (val) => contact['email'] = val,
                               ),
                             ),
                           ],
@@ -1652,6 +2041,8 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                 "Line ID",
                                 "ไอดีไลน์",
                                 icon: Icons.chat,
+                                initialValue: contact['line'],
+                                onChanged: (val) => contact['line'] = val,
                               ),
                             ),
                             const SizedBox(width: 24),
@@ -1660,6 +2051,8 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                 "Other Chat",
                                 "WeChat, Telegram...",
                                 icon: Icons.forum_outlined,
+                                initialValue: contact['other_chat'],
+                                onChanged: (val) => contact['other_chat'] = val,
                               ),
                             ),
                           ],
@@ -1716,6 +2109,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                         "Billing Address (ที่อยู่ออกบิล) *",
                         "กรอกที่อยู่สำหรับออกใบกำกับภาษี (บังคับ)",
                         maxLines: 3,
+                        controller: _billingAddressController,
                       ),
                       const SizedBox(height: 32),
                       const Divider(color: Color(0xFFF4F5F7), height: 1),
@@ -1761,6 +2155,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                           ),
                         ..._formShippingAddresses.asMap().entries.map((entry) {
                           int index = entry.key;
+                          final addr = entry.value;
                           return Container(
                             margin: const EdgeInsets.only(top: 16),
                             padding: const EdgeInsets.all(20),
@@ -1780,6 +2175,8 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                       child: _buildInputField(
                                         "Address Label (ป้ายกำกับ)",
                                         "เช่น สาขาเชียงใหม่, โกดังรังสิต",
+                                        initialValue: addr['label'],
+                                        onChanged: (val) => addr['label'] = val,
                                       ),
                                     ),
                                     const SizedBox(width: 16),
@@ -1788,11 +2185,12 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                         Icons.delete_outline,
                                         color: Color(0xFFEF4444),
                                       ),
-                                      onPressed: () => setState(
-                                        () => _formShippingAddresses.removeAt(
-                                          index,
-                                        ),
-                                      ),
+                                      onPressed: () {
+                                        if (addr['id'] != null) {
+                                          _deletedAddressIds.add(addr['id'] as int);
+                                        }
+                                        setState(() => _formShippingAddresses.removeAt(index));
+                                      },
                                     ),
                                   ],
                                 ),
@@ -1801,6 +2199,8 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                                   "Full Address",
                                   "กรอกที่อยู่จัดส่งแบบเต็ม...",
                                   maxLines: 2,
+                                  initialValue: addr['address'],
+                                  onChanged: (val) => addr['address'] = val,
                                 ),
                               ],
                             ),
@@ -1845,6 +2245,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                         "Remarks",
                         "พิมพ์หมายเหตุเพิ่มเติมสำหรับเซลส์หรือแอดมิน...",
                         maxLines: 5,
+                        controller: _internalNoteController,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -1876,6 +2277,12 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
     String? currentValue,
     Function(String?) onChanged,
   ) {
+    // ป้องกันการแครชของ DropdownButtonFormField ในกรณีที่ค่าจากฐานข้อมูลไม่มีอยู่ในรายการตัวเลือก
+    final dropdownItems = List<String>.from(items);
+    if (currentValue != null && !dropdownItems.contains(currentValue)) {
+      dropdownItems.add(currentValue);
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1889,7 +2296,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          initialValue: currentValue,
+          value: currentValue,
           hint: Text(
             hint,
             style: const TextStyle(color: Color(0xFFB4B4B8), fontSize: 13),
@@ -1906,7 +2313,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
               borderSide: BorderSide.none,
             ),
           ),
-          items: items
+          items: dropdownItems
               .map(
                 (String value) =>
                     DropdownMenuItem<String>(value: value, child: Text(value)),
@@ -2080,6 +2487,9 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
     int maxLines = 1,
     bool isNumber = false,
     IconData? icon,
+    TextEditingController? controller,
+    String? initialValue,
+    ValueChanged<String>? onChanged,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2094,6 +2504,9 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
         ),
         const SizedBox(height: 8),
         TextFormField(
+          controller: controller,
+          initialValue: controller == null ? initialValue : null,
+          onChanged: onChanged,
           maxLines: maxLines,
           keyboardType: isNumber ? TextInputType.number : TextInputType.text,
           decoration: InputDecoration(
@@ -2231,21 +2644,23 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
     );
   }
 
-  // Dialog ยืนยันการยกเลิกสร้างลูกค้า
+  // Dialog ยืนยันการยกเลิกสร้าง/แก้ไขลูกค้า
   void _confirmCancelCreation(BuildContext context) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          "Cancel Creation?",
-          style: TextStyle(
+        title: Text(
+          _isEditingMode ? "Cancel Editing?" : "Cancel Creation?",
+          style: const TextStyle(
             fontWeight: FontWeight.bold,
             color: Color(0xFFD97781),
           ),
         ),
-        content: const Text(
-          "Are you sure you want to discard this form? All entered data will be lost.",
+        content: Text(
+          _isEditingMode
+              ? "Are you sure you want to discard your edits? Unsaved changes will be lost."
+              : "Are you sure you want to discard this form? All entered data will be lost.",
         ),
         actions: [
           TextButton(
@@ -2255,7 +2670,10 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              setState(() => _isCreatingMode = false);
+              setState(() {
+                _isCreatingMode = false;
+                _isEditingMode = false;
+              });
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFD97781),
@@ -2297,13 +2715,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              setState(() => _isCreatingMode = false);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("Customer created successfully!"),
-                  backgroundColor: Color(0xFF4A9062),
-                ),
-              );
+              _saveCustomer();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2563EB),
@@ -2316,5 +2728,203 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
         ],
       ),
     );
+  }
+
+  // Dialog ยืนยันการแก้ไขข้อมูลลูกค้า
+  void _confirmSaveEdit(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          "Update Customer Profile",
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF2563EB),
+          ),
+        ),
+        content: const Text(
+          "Are you sure you want to save changes to this customer profile?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              "Cancel",
+              style: TextStyle(color: Color(0xFF86868B)),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _updateCustomer();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+            ),
+            child: const Text(
+              "Confirm & Save",
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ฟังก์ชันอัปเดตข้อมูลลูกค้า
+  Future<void> _updateCustomer() async {
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final String companyName = _nameController.text.trim();
+      final String taxId = _taxIdController.text.trim();
+      final String billingAddress = _billingAddressController.text.trim();
+      final String internalNote = _internalNoteController.text.trim();
+
+      if (companyName.isEmpty) {
+        throw Exception("กรุณากรอกชื่อบริษัท");
+      }
+
+      String typeStr = "SME";
+      if (_selectedCustomerTier == 1) typeStr = "Mid-Market";
+      if (_selectedCustomerTier == 2) typeStr = "Enterprise";
+
+      String? leadSourceValue = _selectedLeadSource;
+      if (leadSourceValue == "Referral (บอกต่อ)") leadSourceValue = "Referral";
+      if (leadSourceValue == "Exhibition / Event") leadSourceValue = "Exhibition";
+      if (leadSourceValue == "Others") leadSourceValue = "Other";
+
+      final int customerId = _selectedCustomerId!;
+
+      // 1. อัปเดตข้อมูลลูกค้าพื้นฐาน
+      final response = await _api.put(CustomerEndpoints.update(customerId), data: {
+        'name': companyName,
+        'type': typeStr,
+        'tax_id': taxId.isNotEmpty ? taxId : null,
+        'branch': _selectedBranch,
+        'industry': _selectedIndustry,
+        'lead_source': leadSourceValue,
+        'internal_note': internalNote.isNotEmpty ? internalNote : null,
+        'billing_address': billingAddress.isNotEmpty ? billingAddress : null,
+      });
+
+      final body = response.data;
+      if (body['success'] == true) {
+        // 2. ลบผู้ติดต่อที่กดลบ
+        for (var cid in _deletedContactIds) {
+          try {
+            await _api.delete(CustomerEndpoints.deleteContact(customerId, cid));
+          } catch (e) {
+            debugPrint("Error deleting contact $cid: $e");
+          }
+        }
+
+        // 3. ลบที่อยู่ที่กดลบ
+        for (var aid in _deletedAddressIds) {
+          try {
+            await _api.delete(CustomerEndpoints.deleteAddress(customerId, aid));
+          } catch (e) {
+            debugPrint("Error deleting address $aid: $e");
+          }
+        }
+
+        // 4. สร้างหรืออัปเดตผู้ติดต่อ
+        for (var contact in _formContacts) {
+          final String name = contact['name'] ?? "";
+          if (name.isNotEmpty) {
+            final contactPayload = {
+              'name': name,
+              'role': contact['role'],
+              'phone': contact['phone'],
+              'email': contact['email'],
+              'line_id': contact['line'],
+              'other_chat': contact['other_chat'],
+              'is_primary': _formContacts.indexOf(contact) == 0,
+            };
+
+            if (contact['id'] != null) {
+              // อัปเดตอันเดิม
+              await _api.put(
+                CustomerEndpoints.updateContact(customerId, contact['id']),
+                data: contactPayload,
+              );
+            } else {
+              // สร้างอันใหม่
+              await _api.post(
+                CustomerEndpoints.contacts(customerId),
+                data: contactPayload,
+              );
+            }
+          }
+        }
+
+        // 5. สร้างหรืออัปเดตที่อยู่จัดส่ง (หากไม่เหมือนกับที่อยู่ออกบิล)
+        if (!_isShippingSameAsBilling) {
+          for (var addr in _formShippingAddresses) {
+            final String label = addr['label'] ?? "";
+            final String address = addr['address'] ?? "";
+            if (label.isNotEmpty && address.isNotEmpty) {
+              final addressPayload = {
+                'label': label,
+                'address': address,
+                'is_default': _formShippingAddresses.indexOf(addr) == 0,
+              };
+
+              if (addr['id'] != null) {
+                // อัปเดตอันเดิม
+                await _api.put(
+                  CustomerEndpoints.updateAddress(customerId, addr['id']),
+                  data: addressPayload,
+                );
+              } else {
+                // สร้างอันใหม่
+                await _api.post(
+                  CustomerEndpoints.addresses(customerId),
+                  data: addressPayload,
+                );
+              }
+            }
+          }
+        }
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("อัปเดตข้อมูลลูกค้า '$companyName' เรียบร้อยแล้ว!"),
+            backgroundColor: const Color(0xFF4A9062),
+          ),
+        );
+
+        _isCreatingMode = false;
+        _isEditingMode = false;
+        await _fetchCustomers();
+        await _fetchCustomerDetail(customerId);
+      } else {
+        throw Exception(body['error']?['message'] ?? 'อัปเดตข้อมูลไม่สำเร็จ');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("เกิดข้อผิดพลาด"),
+          content: Text(ApiErrorHandler.parseError(e)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("ตกลง"),
+            )
+          ],
+        ),
+      );
+    } finally {
+      setState(() {
+        _isSaving = false;
+      });
+    }
   }
 }

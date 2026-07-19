@@ -1,5 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../core/api/api_client.dart';
+import '../../core/api/api_endpoints.dart';
+import '../../core/api/api_error_handler.dart';
 
 class MouseDraggableScrollBehavior extends MaterialScrollBehavior {
   @override
@@ -17,139 +20,245 @@ class InventoryScreen extends StatefulWidget {
 }
 
 class _InventoryScreenState extends State<InventoryScreen> {
+  // API client
+  final ApiClient _api = ApiClient();
+  bool _isLoading = false;
+  List<dynamic> _warehouses = [];
+  List<dynamic> _currentStock = [];
+  List<dynamic> _activeProjects = [];
+
   String _searchText = "";
-  String _selectedWarehouseId = "WH-001";
+  dynamic _selectedWarehouseId;
 
-  // ==========================================
-  // Mock Data: รายชื่อคลังสินค้า (เพิ่มสถานะ Temp Storage)
-  // ==========================================
-  final List<Map<String, dynamic>> _warehouses = [
-    {
-      "id": "WH-001",
-      "name": "โกดังพระราม 2 (Zone A)",
-      "province": "กรุงเทพมหานคร",
-      "type": "PPN Own Warehouse (คลังหลัก)",
-      "last_received": "26 May 2026",
-      "current_stock": <Map<String, dynamic>>[
-        {
-          "item": "กระเป๋าผ้าคอตตอน 12 ออนซ์",
-          "sku": "BG-COT-01",
-          "ownership": "Client",
-          "owner_ref": "Lion (Thailand)",
-          "arrived": 25000,
-          "sent": 5000,
-          "available": 20000,
-          "history": [
-            {
-              "date_in": "20 May 2026",
-              "ref": "PRJ-001 (ล็อต 1)",
-              "qty_in": 20000,
-              "date_out": "25 May 2026 (5,000 pcs)",
-              "recorded_by": "System (Container)",
-            },
-            {
-              "date_in": "22 May 2026",
-              "ref": "PRJ-015 (ล็อต 2)",
-              "qty_in": 5000,
-              "date_out": "-",
-              "recorded_by": "System (Container)",
-            },
-          ],
-        },
-        // 🌟 เปลี่ยนเคสนี้เป็น "ฝากเก็บชั่วคราว"
-        {
-          "item": "ร่มพับ 2 ตอน พรีเมียม",
-          "sku": "UM-FLD-02",
-          "ownership": "Temp Storage", // สถานะฝากเก็บ
-          "owner_ref": "PTG Energy", // อ้างอิงชื่อลูกค้า
-          "arrived": 3000,
-          "sent": 0,
-          "available": 3000,
-          "history": [
-            {
-              "date_in": "26 May 2026",
-              "ref": "PRJ-035",
-              "qty_in": 3000,
-              "date_out": "-",
-              "recorded_by":
-                  "System (โกดังลูกค้าเต็ม ฝากไว้ก่อน)", // โน้ตบอกเหตุผล
-            },
-          ],
-        },
-      ],
-    },
-    {
-      "id": "WH-002",
-      "name": "โกดังบางนา (คลังรวมถาวร)",
-      "province": "สมุทรปราการ",
-      "type": "Shared Warehouse",
-      "last_received": "10 May 2026",
-      "current_stock": <Map<String, dynamic>>[
-        {
-          "item": "ร่มกอล์ฟ 30 นิ้ว Central",
-          "sku": "UM-GLF-30",
-          "ownership": "Client",
-          "owner_ref": "Central Group",
-          "arrived": 1500,
-          "sent": 1500,
-          "available": 0,
-          "history": [
-            {
-              "date_in": "10 May 2026",
-              "ref": "PRJ-004",
-              "qty_in": 1500,
-              "date_out": "15 May 2026 (Full)",
-              "recorded_by": "Admin B",
-            },
-          ],
-        },
-        {
-          "item": "กระบอกน้ำสแตนเลส (Stock กลาง)",
-          "sku": "BT-STL-05",
-          "ownership": "PPN Own Stock",
-          "owner_ref": "PPN",
-          "arrived": 2000,
-          "sent": 200,
-          "available": 1800,
-          "history": [
-            {
-              "date_in": "01 Apr 2026",
-              "ref": "PO-INT-001",
-              "qty_in": 2000,
-              "date_out": "15 Apr (200 pcs)",
-              "recorded_by": "Manager C",
-            },
-          ],
-        },
-      ],
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _fetchWarehouses();
+    _fetchActiveProjects();
+  }
 
-  // รายการออเดอร์สำหรับทำ Manual Adjust
-  final List<Map<String, dynamic>> _incomingOrders = [
-    {
-      "project_id": "PRJ-021",
-      "customer": "Line Man",
-      "product": "แจ็คเก็ตไรเดอร์ กันน้ำ",
-      "qty": 10000,
-    },
-    {
-      "project_id": "PRJ-035",
-      "customer": "PTG Energy",
-      "product": "กระบอกน้ำเก็บอุณหภูมิ",
-      "qty": 5000,
-    },
-  ];
+  Future<void> _fetchWarehouses() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await _api.get(InventoryEndpoints.warehouses);
+      if (response.data['success'] == true) {
+        final List data = response.data['data'] ?? [];
+        setState(() {
+          _warehouses = data;
+          if (_warehouses.isNotEmpty) {
+            final exists = _warehouses.any(
+              (w) => w['id'] == _selectedWarehouseId,
+            );
+            if (!exists) {
+              _selectedWarehouseId = _warehouses[0]['id'];
+            }
+            _fetchWarehouseStocks(_selectedWarehouseId);
+          } else {
+            _selectedWarehouseId = null;
+            _currentStock = [];
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching warehouses: $e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
-  List<Map<String, dynamic>> _getFilteredWarehouses() {
+  Future<void> _fetchWarehouseStocks(dynamic warehouseId) async {
+    if (warehouseId == null) return;
+    try {
+      final int wId = warehouseId is int
+          ? warehouseId
+          : int.tryParse(warehouseId.toString()) ?? 0;
+      if (wId == 0) return;
+      final response = await _api.get(InventoryEndpoints.warehouseStocks(wId));
+      if (response.data['success'] == true) {
+        setState(() {
+          _currentStock = response.data['data'] ?? [];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching warehouse stocks: $e");
+    }
+  }
+
+  Future<void> _fetchActiveProjects() async {
+    try {
+      final response = await _api.get(ProjectEndpoints.index);
+      if (response.data['success'] == true) {
+        setState(() {
+          _activeProjects = response.data['data'] ?? [];
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching active projects: $e");
+    }
+  }
+
+  Future<void> _addWarehouse({
+    required String name,
+    required String location,
+  }) async {
+    try {
+      final response = await _api.post(
+        InventoryEndpoints.warehouses,
+        data: {'name': name, 'location': location},
+      );
+
+      if (response.data['success'] == true) {
+        _fetchWarehouses();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("เพิ่มคลังสินค้าใหม่เรียบร้อยแล้ว"),
+              backgroundColor: Color(0xFF4A9062),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                response.data['message'] ??
+                    "เกิดข้อผิดพลาดในการสร้างคลังสินค้า",
+              ),
+              backgroundColor: const Color(0xFFD97781),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Error adding warehouse: $e");
+      if (mounted) {
+        final errorMessage = ApiErrorHandler.parseError(e);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: const Color(0xFFD97781),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _adjustStock({
+    required int warehouseId,
+    required int projectId,
+    required int productItemId,
+    required int qty,
+    required String type, // IN, OUT, ADJUST
+    required String notes,
+    String? locationInWarehouse,
+  }) async {
+    try {
+      final response = await _api.post(
+        InventoryEndpoints.adjust,
+        data: {
+          'warehouse_id': warehouseId,
+          'project_id': projectId,
+          'product_item_id': productItemId,
+          'qty': qty,
+          'type': type,
+          'notes': notes,
+          if (locationInWarehouse != null && locationInWarehouse.isNotEmpty)
+            'location_in_warehouse': locationInWarehouse,
+        },
+      );
+
+      if (response.data['success'] == true) {
+        _fetchWarehouseStocks(_selectedWarehouseId);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text("บันทึกการปรับปรุงสต็อกเรียบร้อยแล้ว"),
+              backgroundColor: Color(0xFF4A9062),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                response.data['message'] ?? "เกิดข้อผิดพลาดในการบันทึก",
+              ),
+              backgroundColor: const Color(0xFFD97781),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Error adjusting stock: $e");
+      if (mounted) {
+        final errorMessage = ApiErrorHandler.parseError(e);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: const Color(0xFFD97781),
+          ),
+        );
+      }
+    }
+  }
+
+  String _getLastReceivedDate(List stocks) {
+    if (stocks.isEmpty) return 'ไม่มีข้อมูล';
+    DateTime? latest;
+    for (var s in stocks) {
+      final dateStr = s['last_received_at'] ?? s['updated_at'];
+      if (dateStr != null) {
+        final dt = DateTime.tryParse(dateStr.toString());
+        if (dt != null) {
+          if (latest == null || dt.isAfter(latest)) {
+            latest = dt;
+          }
+        }
+      }
+    }
+    if (latest == null) return 'ไม่มีข้อมูล';
+    return "${latest.day} ${_getMonthName(latest.month)} ${latest.year}";
+  }
+
+  String _getWarehouseType(Map<String, dynamic> w) {
+    final String name = (w['name'] ?? '').toString().toLowerCase();
+    if (name.contains('ราม 2') || name.contains('rama 2'))
+      return 'PPN Own Warehouse (คลังหลัก)';
+    if (name.contains('บางนา') || name.contains('bangna'))
+      return 'Shared Warehouse';
+    return 'PPN Own';
+  }
+
+  String _getMonthName(int month) {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    if (month >= 1 && month <= 12) return months[month - 1];
+    return '';
+  }
+
+  List<dynamic> _getFilteredWarehouses() {
     if (_searchText.isEmpty) return _warehouses;
     return _warehouses
         .where(
           (w) =>
-              w['name'].toString().toLowerCase().contains(
+              (w['name'] ?? '').toString().toLowerCase().contains(
                 _searchText.toLowerCase(),
               ) ||
-              w['province'].toString().toLowerCase().contains(
+              (w['location'] ?? '').toString().toLowerCase().contains(
                 _searchText.toLowerCase(),
               ),
         )
@@ -161,17 +270,19 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final filteredWarehouses = _getFilteredWarehouses();
     Map<String, dynamic> selectedWarehouse = filteredWarehouses.firstWhere(
       (w) => w['id'] == _selectedWarehouseId,
-      orElse: () => _warehouses.isNotEmpty ? _warehouses[0] : {},
+      orElse: () => _warehouses.isNotEmpty
+          ? Map<String, dynamic>.from(_warehouses[0])
+          : <String, dynamic>{},
     );
 
     // คำนวณยอดรวมของคลังที่เลือก
-    int totalSkus = 0;
+    int totalSkus = _currentStock.length;
     int totalAvailableItems = 0;
-    if (selectedWarehouse.isNotEmpty) {
-      final stockList = selectedWarehouse['current_stock'] as List;
-      totalSkus = stockList.length;
-      for (var item in stockList) {
-        totalAvailableItems += (item['available'] as int);
+    if (_currentStock.isNotEmpty) {
+      for (var item in _currentStock) {
+        final int inStock = item['qty_in_stock'] ?? 0;
+        final int reserved = item['qty_reserved'] ?? 0;
+        totalAvailableItems += (inStock - reserved);
       }
     }
 
@@ -289,11 +400,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     itemBuilder: (context, index) {
                       final w = filteredWarehouses[index];
                       final isSelected = _selectedWarehouseId == w['id'];
-                      final int skusCount = (w['current_stock'] as List).length;
+                      final String province = (w['location'] ?? '')
+                          .toString()
+                          .split(' ')
+                          .first;
+                      final String typeStr = _getWarehouseType(w);
+                      final String lastRec = isSelected
+                          ? _getLastReceivedDate(_currentStock)
+                          : 'เปิดเพื่อดู';
 
                       return InkWell(
-                        onTap: () =>
-                            setState(() => _selectedWarehouseId = w['id']),
+                        onTap: () {
+                          setState(() {
+                            _selectedWarehouseId = w['id'];
+                          });
+                          _fetchWarehouseStocks(w['id']);
+                        },
                         borderRadius: BorderRadius.circular(16),
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -317,7 +439,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                     MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    w['id'],
+                                    "WH-${w['id']?.toString().padLeft(3, '0')}",
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
@@ -326,29 +448,18 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                           : const Color(0xFF86868B),
                                     ),
                                   ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFE2E8F0),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      "$skusCount SKUs",
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF475569),
-                                      ),
-                                    ),
+                                  Icon(
+                                    Icons.warehouse_rounded,
+                                    size: 16,
+                                    color: isSelected
+                                        ? const Color(0xFF5B7BD5)
+                                        : const Color(0xFF86868B),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                w['name'],
+                                w['name'] ?? '',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15,
@@ -364,19 +475,25 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                     color: Color(0xFF86868B),
                                   ),
                                   const SizedBox(width: 4),
-                                  Text(
-                                    w['province'],
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Color(0xFF86868B),
-                                      fontWeight: FontWeight.w500,
+                                  Expanded(
+                                    child: Text(
+                                      province.isNotEmpty
+                                          ? province
+                                          : (w['location'] ?? ''),
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF86868B),
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                "Type: ${w['type']}",
+                                "Type: $typeStr",
                                 style: const TextStyle(
                                   fontSize: 11,
                                   color: Color(0xFF86868B),
@@ -384,7 +501,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                "Last received: ${w['last_received']}",
+                                "Last received: $lastRec",
                                 style: const TextStyle(
                                   fontSize: 11,
                                   color: Color(0xFF86868B),
@@ -429,7 +546,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            "${selectedWarehouse['name']} (${selectedWarehouse['province']})",
+                            selectedWarehouse['name'] != null
+                                ? "${selectedWarehouse['name']} (${selectedWarehouse['location']?.toString().split(' ').first ?? ''})"
+                                : "กำลังโหลด...",
                             style: const TextStyle(
                               fontSize: 16,
                               color: Color(0xFF5B7BD5),
@@ -478,7 +597,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       Expanded(
                         child: _buildSummaryCard(
                           "Last Received",
-                          selectedWarehouse['last_received'],
+                          _getLastReceivedDate(_currentStock),
                           Icons.history_rounded,
                           const Color(0xFFF4F5F7),
                           const Color(0xFF86868B),
@@ -535,7 +654,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         ),
                       ],
                     ),
-                    child: (selectedWarehouse['current_stock'] as List).isEmpty
+                    child: _currentStock.isEmpty
                         ? const Padding(
                             padding: EdgeInsets.all(64.0),
                             child: Center(
@@ -647,125 +766,138 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                 ),
                               ),
                               // 🌟 Table Rows (ใช้ Expanded)
-                              ...((selectedWarehouse['current_stock'] as List)
-                                  .map((stock) {
-                                    return Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 24,
-                                        vertical: 16,
+                              ...(_currentStock.map((stock) {
+                                final skuStr =
+                                    stock['product_item']?['sku'] ?? 'TBA';
+                                final nameStr =
+                                    stock['product_item']?['name'] ??
+                                    'ไม่มีรายการสินค้า';
+                                final arrivedQty = stock['qty_in_stock'] ?? 0;
+                                final sentQty = stock['qty_reserved'] ?? 0;
+                                final availableQty = arrivedQty - sentQty;
+
+                                final String ownership =
+                                    stock['project'] != null
+                                    ? 'Client'
+                                    : 'PPN Own Stock';
+                                final String ref =
+                                    stock['project']?['customer']?['name'] ??
+                                    stock['project']?['project_code'] ??
+                                    'PPN';
+
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 16,
+                                  ),
+                                  decoration: const BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: Color(0xFFF1F5F9),
                                       ),
-                                      decoration: const BoxDecoration(
-                                        border: Border(
-                                          bottom: BorderSide(
-                                            color: Color(0xFFF1F5F9),
+                                    ),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      Expanded(
+                                        flex: 2,
+                                        child: Text(
+                                          skuStr,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          nameStr,
+                                          style: const TextStyle(fontSize: 14),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 2,
+                                        child: _buildOwnershipBadge(
+                                          ownership,
+                                          ref,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Text(
+                                          "$arrivedQty",
+                                          style: const TextStyle(
+                                            color: Color(0xFF4A9062),
+                                            fontWeight: FontWeight.w500,
                                           ),
                                         ),
                                       ),
-                                      child: Row(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        children: [
-                                          Expanded(
-                                            flex: 2,
-                                            child: Text(
-                                              stock['sku'],
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Text(
+                                          "$sentQty",
+                                          style: const TextStyle(
+                                            color: Color(0xFFD97781),
+                                            fontWeight: FontWeight.w500,
                                           ),
-                                          Expanded(
-                                            flex: 3,
-                                            child: Text(
-                                              stock['item'],
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Text(
+                                          "$availableQty",
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 18,
+                                            color: Color(0xFF1D1D1F),
                                           ),
-                                          Expanded(
-                                            flex: 2,
-                                            child: _buildOwnershipBadge(
-                                              stock['ownership'],
-                                              stock['owner_ref'],
+                                        ),
+                                      ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Align(
+                                          alignment: Alignment.center,
+                                          child: InkWell(
+                                            onTap: () =>
+                                                _showMovementHistoryDialog(
+                                                  context,
+                                                  stock,
+                                                ),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
                                             ),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: Text(
-                                              "${stock['arrived']}",
-                                              style: const TextStyle(
-                                                color: Color(0xFF4A9062),
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: Text(
-                                              "${stock['sent']}",
-                                              style: const TextStyle(
-                                                color: Color(0xFFD97781),
-                                                fontWeight: FontWeight.w500,
-                                              ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: Text(
-                                              "${stock['available']}",
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 18,
-                                                color: Color(0xFF1D1D1F),
-                                              ),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            flex: 1,
-                                            child: Align(
-                                              alignment: Alignment.center,
-                                              child: InkWell(
-                                                onTap: () =>
-                                                    _showMovementHistoryDialog(
-                                                      context,
-                                                      stock,
-                                                    ),
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 8,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(
+                                                  0xFFAEC4FA,
+                                                ).withOpacity(0.2),
                                                 borderRadius:
                                                     BorderRadius.circular(8),
-                                                child: Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 12,
-                                                        vertical: 8,
-                                                      ),
-                                                  decoration: BoxDecoration(
-                                                    color: const Color(
-                                                      0xFFAEC4FA,
-                                                    ).withOpacity(0.2),
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                          8,
-                                                        ),
-                                                  ),
-                                                  child: const Icon(
-                                                    Icons.history_rounded,
-                                                    color: Color(0xFF5B7BD5),
-                                                    size: 18,
-                                                  ),
-                                                ),
+                                              ),
+                                              child: const Icon(
+                                                Icons.history_rounded,
+                                                color: Color(0xFF5B7BD5),
+                                                size: 18,
                                               ),
                                             ),
                                           ),
-                                        ],
+                                        ),
                                       ),
-                                    );
-                                  })
-                                  .toList()),
+                                    ],
+                                  ),
+                                );
+                              }).toList()),
                             ],
                           ),
                   ),
@@ -933,9 +1065,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
     Map<String, dynamic> warehouse,
   ) {
     String type = "Stock In (รับเข้า)";
-    String? selectedProject;
+    int? selectedProjectId;
+    int? selectedProductItemId;
     int receivedQty = 0;
     String note = "";
+    String locationInWarehouse = "";
 
     showDialog(
       context: context,
@@ -971,8 +1105,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
-                      initialValue: type,
+                      value: type,
                       decoration: InputDecoration(
+                        labelText: "Adjustment type | ประเภทการปรับปรุง",
                         filled: true,
                         fillColor: const Color(0xFFF4F5F7),
                         border: OutlineInputBorder(
@@ -984,7 +1119,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           [
                                 "Stock In (รับเข้า)",
                                 "Stock Out (เบิกออก)",
-                                "Write-off (ตัดจำหน่าย/ของเสีย)",
+                                "Write-off (ปรับยอดสต็อก)",
                               ]
                               .map(
                                 (s) =>
@@ -1003,10 +1138,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    DropdownButtonFormField<String>(
-                      initialValue: selectedProject,
+                    DropdownButtonFormField<int>(
+                      value: selectedProjectId,
                       decoration: InputDecoration(
-                        hintText: "เลือกรายการ",
+                        labelText: "Adjustment project | โครงการอ้างอิง",
+                        hintText: "เลือกโปรเจกต์",
                         filled: true,
                         fillColor: const Color(0xFFF4F5F7),
                         border: OutlineInputBorder(
@@ -1014,21 +1150,75 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           borderSide: BorderSide.none,
                         ),
                       ),
-                      items: _incomingOrders
+                      items: _activeProjects
                           .map(
-                            (o) => DropdownMenuItem<String>(
-                              value: o['project_id'],
+                            (p) => DropdownMenuItem<int>(
+                              value: p['id'] as int,
                               child: Text(
-                                "${o['project_id']} - ${o['customer']} (${o['product']})",
+                                "${p['project_code'] ?? 'PRJ-${p['id']}'} - ${p['customer']?['name'] ?? 'ลูกค้าทั่วไป'}",
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           )
                           .toList(),
-                      onChanged: (val) =>
-                          setDialogState(() => selectedProject = val),
+                      onChanged: (val) {
+                        setDialogState(() {
+                          selectedProjectId = val;
+                          selectedProductItemId = null;
+                        });
+                      },
                     ),
                     const SizedBox(height: 16),
+
+                    if (selectedProjectId != null) ...[
+                      const Text(
+                        "เลือกรายการสินค้าในโปรเจกต์",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<int>(
+                        value: selectedProductItemId,
+                        decoration: InputDecoration(
+                          labelText: "Adjustment product | สินค้าที่ปรับ",
+                          hintText: "เลือกสินค้า",
+                          filled: true,
+                          fillColor: const Color(0xFFF4F5F7),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        items: (() {
+                          final proj = _activeProjects.firstWhere(
+                            (p) => p['id'] == selectedProjectId,
+                            orElse: () => null,
+                          );
+                          final List items = proj != null
+                              ? (proj['product_items'] ?? [])
+                              : [];
+                          return items
+                              .map(
+                                (item) => DropdownMenuItem<int>(
+                                  value: item['id'] as int,
+                                  child: Text(
+                                    "${item['sku'] ?? 'TBA'} - ${item['name'] ?? ''}",
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList();
+                        })(),
+                        onChanged: (val) {
+                          setDialogState(() {
+                            selectedProductItemId = val;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
                     const Text(
                       "3. จำนวนที่ปรับ (Pcs)",
@@ -1041,6 +1231,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     TextFormField(
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
+                        labelText: "Adjustment quantity | จำนวนที่ปรับ",
                         hintText: "0",
                         filled: true,
                         fillColor: const Color(0xFFF4F5F7),
@@ -1054,7 +1245,30 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     const SizedBox(height: 16),
 
                     const Text(
-                      "4. หมายเหตุ (Reason)",
+                      "4. ที่ตั้งในคลังสินค้า (Location in Warehouse)",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      decoration: InputDecoration(
+                        labelText: "Warehouse location | ที่ตั้งในคลัง",
+                        hintText: "เช่น Zone A-1",
+                        filled: true,
+                        fillColor: const Color(0xFFF4F5F7),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      onChanged: (val) => locationInWarehouse = val,
+                    ),
+                    const SizedBox(height: 16),
+
+                    const Text(
+                      "5. หมายเหตุ (Reason)",
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
@@ -1064,6 +1278,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     TextFormField(
                       maxLines: 2,
                       decoration: InputDecoration(
+                        labelText: "Adjustment reason | เหตุผล",
                         hintText: "ระบุเหตุผลการปรับปรุง...",
                         filled: true,
                         fillColor: const Color(0xFFF4F5F7),
@@ -1088,40 +1303,28 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ),
               ElevatedButton(
                 onPressed: () {
-                  if (selectedProject == null || receivedQty == 0) return;
-                  var order = _incomingOrders.firstWhere(
-                    (o) => o['project_id'] == selectedProject,
-                  );
+                  if (selectedProjectId == null ||
+                      selectedProductItemId == null ||
+                      receivedQty == 0)
+                    return;
 
-                  setState(() {
-                    if (type == "Stock In (รับเข้า)") {
-                      (warehouse['current_stock'] as List).add({
-                        "sku": "RCV-${order['project_id']}",
-                        "item": order['product'],
-                        "ownership": "Client",
-                        "owner_ref": order['customer'],
-                        "arrived": receivedQty,
-                        "sent": 0,
-                        "available": receivedQty,
-                        "history": [
-                          {
-                            "date_in": "Today",
-                            "ref": "Manual Adjust",
-                            "qty_in": receivedQty,
-                            "date_out": "-",
-                            "recorded_by": "You",
-                          },
-                        ],
-                      });
-                    }
-                  });
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("บันทึกการปรับปรุงสต็อกเรียบร้อยแล้ว"),
-                      backgroundColor: Color(0xFF4A9062),
-                    ),
+                  String typeCode = 'IN';
+                  if (type == "Stock Out (เบิกออก)") {
+                    typeCode = 'OUT';
+                  } else if (type == "Write-off (ปรับยอดสต็อก)") {
+                    typeCode = 'ADJUST';
+                  }
+
+                  _adjustStock(
+                    warehouseId: warehouse['id'] as int,
+                    projectId: selectedProjectId!,
+                    productItemId: selectedProductItemId!,
+                    qty: receivedQty,
+                    type: typeCode,
+                    notes: note,
+                    locationInWarehouse: locationInWarehouse,
                   );
+                  Navigator.pop(context);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF1D1D1F),
@@ -1145,13 +1348,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
     BuildContext context,
     Map<String, dynamic> stockItem,
   ) {
-    List history = stockItem['history'] ?? [];
+    List history = stockItem['movements'] ?? [];
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text(
-          "Stock Movement: ${stockItem['item']}",
+          "Stock Movement: ${stockItem['product_item']?['name'] ?? ''}",
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         content: SizedBox(
@@ -1182,20 +1385,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       child: Row(
                         children: const [
                           Expanded(
-                            flex: 2,
-                            child: Text(
-                              "Date In",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                color: Color(0xFF64748B),
-                              ),
-                            ),
-                          ),
-                          Expanded(
                             flex: 3,
                             child: Text(
-                              "Ref",
+                              "Date & Time",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
@@ -1206,18 +1398,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           Expanded(
                             flex: 2,
                             child: Text(
-                              "Qty In",
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                color: Color(0xFF64748B),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            flex: 3,
-                            child: Text(
-                              "Date Out (Qty)",
+                              "Type",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
@@ -1228,7 +1409,29 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           Expanded(
                             flex: 2,
                             child: Text(
-                              "By",
+                              "Quantity",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 4,
+                            child: Text(
+                              "Details / Reason",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                                color: Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              "Recorded By",
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 12,
@@ -1244,6 +1447,26 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       child: SingleChildScrollView(
                         child: Column(
                           children: history.map((h) {
+                            final dateStr = h['created_at'] != null
+                                ? DateTime.tryParse(h['created_at'].toString())
+                                          ?.toLocal()
+                                          .toString()
+                                          .split('.')
+                                          .first ??
+                                      h['created_at'].toString()
+                                : '-';
+                            final typeStr = h['movement_type'] ?? 'IN';
+                            final Color typeColor = typeStr == 'IN'
+                                ? const Color(0xFF10B981)
+                                : (typeStr == 'OUT'
+                                      ? const Color(0xFFEF4444)
+                                      : const Color(0xFFF59E0B));
+                            final notesStr =
+                                h['notes'] ??
+                                h['reference_type'] ??
+                                'Manual Adjustment';
+                            final byStr = h['creator']?['name'] ?? 'System';
+
                             return Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 16,
@@ -1257,44 +1480,60 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               child: Row(
                                 children: [
                                   Expanded(
-                                    flex: 2,
-                                    child: Text(
-                                      h['date_in'].toString(),
-                                      style: const TextStyle(fontSize: 13),
-                                    ),
-                                  ),
-                                  Expanded(
                                     flex: 3,
                                     child: Text(
-                                      h['ref'].toString(),
+                                      dateStr,
                                       style: const TextStyle(fontSize: 13),
                                     ),
                                   ),
                                   Expanded(
                                     flex: 2,
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: typeColor.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          typeStr,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: typeColor,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
                                     child: Text(
-                                      h['qty_in'].toString(),
-                                      style: const TextStyle(
+                                      "${h['qty'] ?? 0}",
+                                      style: TextStyle(
                                         fontSize: 13,
-                                        color: Color(0xFF4A9062),
+                                        color: typeColor,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ),
                                   Expanded(
-                                    flex: 3,
+                                    flex: 4,
                                     child: Text(
-                                      h['date_out'].toString(),
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: Color(0xFFD97781),
-                                      ),
+                                      notesStr,
+                                      style: const TextStyle(fontSize: 13),
                                     ),
                                   ),
                                   Expanded(
                                     flex: 2,
                                     child: Text(
-                                      h['recorded_by'].toString(),
+                                      byStr,
                                       style: const TextStyle(
                                         fontSize: 13,
                                         color: Color(0xFF475569),
@@ -1328,6 +1567,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   void _showAddWarehouseDialog(BuildContext context) {
+    String name = "";
+    String physicalAddr = "";
+    String province = "";
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1351,6 +1594,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     borderSide: BorderSide.none,
                   ),
                 ),
+                onChanged: (val) => name = val,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -1363,6 +1607,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     borderSide: BorderSide.none,
                   ),
                 ),
+                onChanged: (val) => physicalAddr = val,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -1375,54 +1620,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     borderSide: BorderSide.none,
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                decoration: InputDecoration(
-                  labelText: "ประเภทคลัง (Warehouse Type)",
-                  filled: true,
-                  fillColor: const Color(0xFFF4F5F7),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-                items: ["PPN Own", "Shared (รวมถาวร)", "Client's Site", "Other"]
-                    .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                    .toList(),
-                onChanged: (val) {},
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      decoration: InputDecoration(
-                        labelText: "ชื่อผู้ติดต่อ",
-                        filled: true,
-                        fillColor: const Color(0xFFF4F5F7),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      decoration: InputDecoration(
-                        labelText: "เบอร์โทรศัพท์",
-                        filled: true,
-                        fillColor: const Color(0xFFF4F5F7),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                onChanged: (val) => province = val,
               ),
             ],
           ),
@@ -1436,7 +1634,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
             ),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              if (name.isEmpty || physicalAddr.isEmpty || province.isEmpty)
+                return;
+              _addWarehouse(name: name, location: "$province $physicalAddr");
+              Navigator.pop(context);
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1D1D1F),
               shape: RoundedRectangleBorder(

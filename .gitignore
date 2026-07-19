@@ -64,3 +64,28 @@ PROGRESS.md
 *.suo
 *.user
 *.sln.docstates
+
+# Local docs (not pushed to GitHub)
+docs/
+
+# Playwright E2E generated artifacts
+/node_modules/
+/playwright-report/
+/test-results/
+/playwright-report-video/
+/test-results-video/
+/playwright-report-realistic/
+/test-results-realistic/
+/playwright-report-*/
+/test-results-*/
+/realistic-e2e-run.*.log
+/realistic-e2e-run.pid
+
+# Laravel files in Flutter workspace
+/.env
+/bootstrap/
+/storage/
+/vendor/
+/reports/
+
+
