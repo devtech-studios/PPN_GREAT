@@ -18,19 +18,35 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="PPN GREAT ERP - Import Operation Platform">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="ppn_great">
+  <meta name="apple-mobile-web-app-title" content="PPN GREAT">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>ppn_great</title>
+  <title>PPN GREAT ERP</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Pusher JS Client SDK -->
+  <script src="https://js.pusher.com/8.4.0/pusher.min.js"></script>
+  <script>
+    window.initPusherNotification = function(appKey, cluster) {
+      if (window.pusherClient) return;
+      window.pusherClient = new Pusher(appKey, { cluster: cluster });
+      var channel = window.pusherClient.subscribe('my-channel');
+      channel.bind('my-event', function(data) {
+        console.log('[Pusher Web] Event Received:', data);
+        if (window.onPusherEventReceived) {
+          window.onPusherEventReceived(JSON.stringify(data));
+        }
+      });
+    };
+  </script>
 </head>
 <body>
   <!--

@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_endpoints.dart';
 import '../../core/auth/auth_service.dart';
@@ -687,6 +688,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context)!;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       body: Row(
@@ -712,9 +715,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              "สวัสดี คุณ Pun 👋",
-                              style: TextStyle(
+                            Text(
+                              s.dashboardGreeting("Pun"),
+                              style: const TextStyle(
                                 fontSize: 36,
                                 fontWeight: FontWeight.w700,
                                 color: Color(0xFF0F172A),
@@ -724,8 +727,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             const SizedBox(height: 8),
                             Text(
                               _summaryData != null
-                                  ? "You have ${_summaryData!['active_projects_count']} active projects today"
-                                  : "Loading active projects today...",
+                                  ? s.activeProjectsToday(
+                                      _summaryData!['active_projects_count'] as int? ?? 0,
+                                    )
+                                  : s.loadingActiveProjects,
                               style: const TextStyle(
                                 fontSize: 16,
                                 color: Color(0xFF64748B),
@@ -748,18 +753,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                           child: TextField(
                             focusNode: _searchFocusNode,
-                            decoration: const InputDecoration(
-                              hintText: "Search projects, customers...",
-                              hintStyle: TextStyle(
+                            decoration: InputDecoration(
+                              hintText: s.searchHint,
+                              hintStyle: const TextStyle(
                                 color: Color(0xFF94A3B8),
                                 fontSize: 14,
                               ),
-                              prefixIcon: Icon(
+                              prefixIcon: const Icon(
                                 Icons.search,
                                 color: Color(0xFF64748B),
                               ),
                               border: InputBorder.none,
-                              contentPadding: EdgeInsets.symmetric(
+                              contentPadding: const EdgeInsets.symmetric(
                                 vertical: 14,
                               ),
                             ),
@@ -806,9 +811,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    "Quick Actions",
-                    style: TextStyle(
+                  Text(
+                    S.of(context)!.quickActionsHeader,
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF0F172A),
@@ -818,7 +823,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   // Primary Action (Filled)
                   _buildPrimaryActionButton(
-                    "Create New Project",
+                    S.of(context)!.btnCreateNewProject,
                     Icons.add_circle,
                     const Color(0xFF2563EB),
                     () {
@@ -833,7 +838,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   // 🌟 เพิ่มปุ่ม Manage Samples ตรงนี้ ก่อน Upload Artwork
                   _buildSecondaryActionButton(
-                    "Manage Samples",
+                    S.of(context)!.btnManageSamples,
                     Icons.science_outlined,
                     const Color(0xFFEC4899), // สีชมพูให้เข้ากับแถบ Sample
                     () {
@@ -849,7 +854,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   // Secondary Actions (Outlined)
                   _buildSecondaryActionButton(
-                    "Upload Artwork",
+                    S.of(context)!.btnUploadArtwork,
                     Icons.brush_outlined,
                     const Color(0xFF8B5CF6),
                     () {
@@ -862,7 +867,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     },
                   ),
                   _buildSecondaryActionButton(
-                    "Generate PI",
+                    S.of(context)!.btnGeneratePI,
                     Icons.receipt_long_outlined,
                     const Color(0xFFF59E0B),
                     () {
@@ -875,7 +880,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     },
                   ),
                   _buildSecondaryActionButton(
-                    "Book Container",
+                    S.of(context)!.btnBookContainer,
                     Icons.directions_boat_outlined,
                     const Color(0xFF64748B),
                     () {
@@ -888,7 +893,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     },
                   ),
                   _buildSecondaryActionButton(
-                    "Record Payment",
+                    S.of(context)!.btnRecordPayment,
                     Icons.payments_outlined,
                     const Color(0xFF10B981),
                     () {
@@ -903,9 +908,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   const SizedBox(height: 56),
 
-                  const Text(
-                    "Activity Log",
-                    style: TextStyle(
+                  Text(
+                    S.of(context)!.activityLogHeader,
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF0F172A),
@@ -913,12 +918,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: 24),
                   _activitiesData.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 24),
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 24),
                           child: Center(
                             child: Text(
-                              "No activities recorded.",
-                              style: TextStyle(color: Color(0xFF94A3B8)),
+                              S.of(context)!.noData,
+                              style: const TextStyle(color: Color(0xFF94A3B8)),
                             ),
                           ),
                         )
@@ -993,9 +998,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             spacing: 16,
             runSpacing: 12,
             children: [
-              const Text(
-                "Cashflow Overview",
-                style: TextStyle(
+              Text(
+                S.of(context)!.cashflowHeader,
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF0F172A),
@@ -1013,17 +1018,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: const [
+                  children: [
                     Text(
-                      "This month",
-                      style: TextStyle(
+                      S.of(context)!.filterThisMonth,
+                      style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFF334155),
                       ),
                     ),
-                    SizedBox(width: 4),
-                    Icon(
+                    const SizedBox(width: 4),
+                    const Icon(
                       Icons.keyboard_arrow_down,
                       size: 16,
                       color: Color(0xFF64748B),
@@ -1038,21 +1043,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildFinanceSummary(
-                "Incoming",
+                S.of(context)!.labelIncoming,
                 _summaryData != null ? incomingStr : "+ ฿3.2M",
                 const Color(0xFF10B981),
                 true,
                 "22%",
               ),
               _buildFinanceSummary(
-                "Outgoing",
+                S.of(context)!.labelOutgoing,
                 _summaryData != null ? outgoingStr : "- ฿2.8M",
                 const Color(0xFFEF4444),
                 false,
                 "8%",
               ),
               _buildFinanceSummary(
-                "Net Balance",
+                S.of(context)!.labelNetBalance,
                 _summaryData != null ? netBalanceStr : "+ ฿400K",
                 const Color(0xFF2563EB),
                 netBalance >= 0,
@@ -1241,9 +1246,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             spacing: 16,
             runSpacing: 12,
             children: [
-              const Text(
-                "Upcoming Schedule",
-                style: TextStyle(
+              Text(
+                S.of(context)!.upcomingScheduleHeader,
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF0F172A),
@@ -1251,9 +1256,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               InkWell(
                 onTap: () {}, // Link to Calendar
-                child: const Text(
-                  "View full calendar →",
-                  style: TextStyle(
+                child: Text(
+                  S.of(context)!.viewFullCalendar,
+                  style: const TextStyle(
                     color: Color(0xFF2563EB),
                     fontWeight: FontWeight.w600,
                     fontSize: 12,
@@ -1264,19 +1269,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           const SizedBox(height: 24),
           _buildScheduleItem(
-            "Container arriving (NYK-892)",
+            S.of(context)!.containerArriving("NYK-892"),
             "Tomorrow, 08:00 AM",
             const Color(0xFF2563EB),
             Icons.directions_boat,
           ),
           _buildScheduleItem(
-            "Customer meeting (Tesla)",
+            S.of(context)!.customerMeeting("Tesla"),
             "Tomorrow, 02:00 PM",
             const Color(0xFF8B5CF6),
             Icons.groups,
           ),
           _buildScheduleItem(
-            "Sample delivery to Lion",
+            S.of(context)!.sampleDelivery("Lion"),
             "Wed, 10:00 AM",
             const Color(0xFFF59E0B),
             Icons.inventory_2,
@@ -1553,6 +1558,7 @@ class _ActiveProjectsSectionState extends State<ActiveProjectsSection> {
   }
 
   List<Map<String, dynamic>> get _tabsData {
+    final s = S.of(context);
     int countByStatus(String status) {
       if (status == "All Active") {
         return widget.projects.where((p) => p['status'] != 'Delivered' && p['status'] != 'Cancelled').length;
@@ -1561,14 +1567,13 @@ class _ActiveProjectsSectionState extends State<ActiveProjectsSection> {
     }
     
     return [
-      {"name": "All Active", "count": countByStatus("All Active"), "color": const Color(0xFF0F172A)},
-      {"name": "Inquiry", "count": countByStatus("Inquiry"), "color": const Color(0xFFF59E0B)},
-      {"name": "Artwork", "count": countByStatus("Artwork"), "color": const Color(0xFF8B5CF6)},
-      {"name": "Deposit", "count": countByStatus("Deposit"), "color": const Color(0xFFEF4444)},
-      {"name": "Sample", "count": countByStatus("Sample"), "color": const Color(0xFFEC4899)},
-      {"name": "Production", "count": countByStatus("Production"), "color": const Color(0xFF2563EB)},
-      {"name": "Shipping", "count": countByStatus("Shipping"), "color": const Color(0xFF06B6D4)},
-      {"name": "Delivered", "count": countByStatus("Delivered"), "color": const Color(0xFF10B981)},
+      {"name": "All Active", "label": s != null ? s.filterAllActive(countByStatus("All Active")) : "All Active (${countByStatus("All Active")})", "count": countByStatus("All Active"), "color": const Color(0xFF0F172A)},
+      {"name": "Inquiry", "label": s != null ? s.filterInquiry(countByStatus("Inquiry")) : "Inquiry (${countByStatus("Inquiry")})", "count": countByStatus("Inquiry"), "color": const Color(0xFFF59E0B)},
+      {"name": "Artwork", "label": s != null ? s.filterArtwork(countByStatus("Artwork")) : "Artwork (${countByStatus("Artwork")})", "count": countByStatus("Artwork"), "color": const Color(0xFF8B5CF6)},
+      {"name": "Deposit", "label": s != null ? s.filterDeposit(countByStatus("Deposit")) : "Deposit (${countByStatus("Deposit")})", "count": countByStatus("Deposit"), "color": const Color(0xFFEF4444)},
+      {"name": "Sample", "label": s != null ? s.filterSample(countByStatus("Sample")) : "Sample (${countByStatus("Sample")})", "count": countByStatus("Sample"), "color": const Color(0xFFEC4899)},
+      {"name": "Production", "label": s != null ? s.filterProduction(countByStatus("Production")) : "Production (${countByStatus("Production")})", "count": countByStatus("Production"), "color": const Color(0xFF2563EB)},
+      {"name": "Shipping", "label": s != null ? s.filterShipping(countByStatus("Shipping")) : "Shipping (${countByStatus("Shipping")})", "count": countByStatus("Shipping"), "color": const Color(0xFF06B6D4)},
     ];
   }
 
@@ -1603,7 +1608,8 @@ class _ActiveProjectsSectionState extends State<ActiveProjectsSection> {
       
       final String rawTargetDate = p['target_date']?.toString() ?? "";
       final String checkInStr = rawTargetDate.split(' ').first.split('T').first;
-      final String dueStr = checkInStr.isNotEmpty ? "Due: $checkInStr" : "No Due Date";
+      final String duePrefix = S.of(context)?.cardDue ?? "Due:";
+      final String dueStr = checkInStr.isNotEmpty ? "$duePrefix $checkInStr" : "";
       
       double progress = 0.05;
       Color urgencyColor = const Color(0xFF10B981);
@@ -1662,20 +1668,20 @@ class _ActiveProjectsSectionState extends State<ActiveProjectsSection> {
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
+                children: [
                   Text(
-                    "Active Projects",
-                    style: TextStyle(
+                    S.of(context)!.activeProjectsHeader,
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w700,
                       color: Color(0xFF0F172A),
                       letterSpacing: -0.5,
                     ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
-                    "Track the status of all orders in the system",
-                    style: TextStyle(fontSize: 14, color: Color(0xFF64748B)),
+                    S.of(context)!.activeProjectsSubtitle,
+                    style: const TextStyle(fontSize: 14, color: Color(0xFF64748B)),
                   ),
                 ],
               ),
@@ -1820,7 +1826,7 @@ class _ActiveProjectsSectionState extends State<ActiveProjectsSection> {
               : [],
         ),
         child: Text(
-          "$name ($count)",
+          tabData['label'] ?? "$name ($count)",
           style: TextStyle(
             color: isSelected ? Colors.white : const Color(0xFF64748B),
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
@@ -2237,9 +2243,9 @@ class _ActiveProjectsSectionState extends State<ActiveProjectsSection> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Budget",
-                          style: TextStyle(
+                        Text(
+                          S.of(context)!.cardBudget,
+                          style: const TextStyle(
                             fontSize: 11,
                             color: Color(0xFF94A3B8),
                           ),
@@ -2257,9 +2263,9 @@ class _ActiveProjectsSectionState extends State<ActiveProjectsSection> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
-                          "Quantity",
-                          style: TextStyle(
+                        Text(
+                          S.of(context)!.cardQuantity,
+                          style: const TextStyle(
                             fontSize: 11,
                             color: Color(0xFF94A3B8),
                           ),
@@ -2286,7 +2292,7 @@ class _ActiveProjectsSectionState extends State<ActiveProjectsSection> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      "Progress",
+                      S.of(context)!.cardProgress,
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,

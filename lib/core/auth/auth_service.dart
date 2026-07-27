@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../api/api_client.dart';
 import '../api/api_endpoints.dart';
+import '../locale/locale_provider.dart';
 import '../storage/token_storage.dart';
 
 /// Auth Service — จัดการ Login/Logout/ตรวจสอบสถานะ Auth
@@ -10,6 +11,7 @@ class AuthService {
   /// Login — ส่ง email + password ไปที่ Backend → รับ JWT Token กลับมา
   /// Return: Map ข้อมูล user ถ้าสำเร็จ, throw Exception ถ้าผิดพลาด
   Future<Map<String, dynamic>> login(String email, String password) async {
+    final isEn = localeProvider.isEnglish;
     try {
       final response = await _api.post(
         AuthEndpoints.login,
@@ -28,15 +30,15 @@ class AuthService {
         await TokenStorage.saveUser(body['data']['user']);
         return body['data']['user'];
       } else {
-        throw Exception(body['error']?['message'] ?? 'เข้าสู่ระบบไม่สำเร็จ');
+        throw Exception(body['error']?['message'] ?? (isEn ? 'Login failed' : 'เข้าสู่ระบบไม่สำเร็จ'));
       }
     } on DioException catch (e) {
       if (e.response != null) {
         final body = e.response!.data;
-        throw Exception(
-            body['error']?['message'] ?? 'เข้าสู่ระบบไม่สำเร็จ (${e.response!.statusCode})');
+        final fallbackMsg = isEn ? 'Login failed (${e.response!.statusCode})' : 'เข้าสู่ระบบไม่สำเร็จ (${e.response!.statusCode})';
+        throw Exception(body['error']?['message'] ?? fallbackMsg);
       }
-      throw Exception('ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่อ');
+      throw Exception(isEn ? 'Cannot connect to server. Please check connection.' : 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่อ');
     }
   }
 

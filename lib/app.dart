@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'l10n/app_localizations.dart';
 
 import 'core/api/api_client.dart';
+import 'core/locale/locale_provider.dart';
 import 'core/storage/token_storage.dart';
 import 'modules/auth/login_screen.dart';
 import 'shared/layouts/main_layout.dart';
@@ -10,23 +12,31 @@ class PPNGreatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'PPN Great ERP',
-      debugShowCheckedModeBanner: false,
-      navigatorKey: ApiClient.navigatorKey,
-      theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFFF7F9FC),
-        primaryColor: const Color(0xFF5B7BD5),
-        fontFamily: 'Prompt', // ใช้ฟอนต์ Prompt
-        colorScheme: ColorScheme.fromSwatch().copyWith(
-          primary: const Color(0xFF5B7BD5),
-          secondary: const Color(0xFF4A9062),
-        ),
-      ),
-      routes: {
-        '/login': (context) => const LoginScreen(),
+    return ListenableBuilder(
+      listenable: localeProvider,
+      builder: (context, child) {
+        return MaterialApp(
+          title: 'PPN Great ERP',
+          debugShowCheckedModeBanner: false,
+          navigatorKey: ApiClient.navigatorKey,
+          locale: localeProvider.locale,
+          localizationsDelegates: S.localizationsDelegates,
+          supportedLocales: S.supportedLocales,
+          theme: ThemeData(
+            scaffoldBackgroundColor: const Color(0xFFF7F9FC),
+            primaryColor: const Color(0xFF5B7BD5),
+            fontFamily: 'Prompt', // ใช้ฟอนต์ Prompt
+            colorScheme: ColorScheme.fromSwatch().copyWith(
+              primary: const Color(0xFF5B7BD5),
+              secondary: const Color(0xFF4A9062),
+            ),
+          ),
+          routes: {
+            '/login': (context) => const LoginScreen(),
+          },
+          home: const _SplashScreen(),
+        );
       },
-      home: const _SplashScreen(),
     );
   }
 }

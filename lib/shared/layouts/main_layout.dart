@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/auth/auth_service.dart';
 import '../../modules/auth/login_screen.dart';
 import '../../modules/containers/containers_screen.dart';
@@ -11,8 +12,8 @@ import '../../modules/suppliers/suppliers_screen.dart';
 import '../../modules/finance/generate_pi_screen.dart';
 import '../../modules/delivery/delivery_screen.dart';
 import '../../modules/reports/reports_screen.dart';
-// เพิ่ม Import หน้านี้เข้ามาสำหรับเมนู Samples
 import '../../modules/orders/upload_design_screen.dart';
+import '../widgets/language_switch_button.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -24,6 +25,8 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout> {
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context)!;
+
     return Scaffold(
       body: Row(
         children: [
@@ -37,23 +40,23 @@ class _MainLayoutState extends State<MainLayout> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Padding(
-                  padding: EdgeInsets.only(left: 16, bottom: 24),
+                Padding(
+                  padding: const EdgeInsets.only(left: 16, bottom: 24),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "PPN GREAT",
-                        style: TextStyle(
+                        s.appTitle,
+                        style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: Color(0xFF1D1D1F),
                         ),
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text(
-                        "Import Operation",
-                        style: TextStyle(
+                        s.importOperation,
+                        style: const TextStyle(
                           fontSize: 12,
                           color: Color(0xFF86868B),
                         ),
@@ -72,64 +75,64 @@ class _MainLayoutState extends State<MainLayout> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // 1. OVERVIEW
-                            _buildSidebarGroupTitle("OVERVIEW"),
+                            _buildSidebarGroupTitle(s.overviewSection.toUpperCase()),
                             _buildMenuItem(
                               0,
-                              "Dashboard",
+                              s.dashboard,
                               Icons.grid_view_rounded,
                             ),
 
                             // 2. OPERATIONS
-                            _buildSidebarGroupTitle("OPERATIONS"),
+                            _buildSidebarGroupTitle(s.operations.toUpperCase()),
                             _buildMenuItem(
                               1,
-                              "Projects (12)",
+                              "${s.projects} (12)",
                               Icons.folder_open_rounded,
                             ),
                             _buildMenuItem(
                               10, // Samples กดแล้วไปหน้า UploadDesignScreen
-                              "Samples",
+                              s.samples,
                               Icons.science_outlined,
                             ),
                             _buildMenuItem(
                               11, // 🌟ไปหน้า UploadDesignScreen (หน้า Artwork เดิม)
-                              "Artwork",
+                              s.artwork,
                               Icons.brush_outlined,
                             ),
                             _buildMenuItem(
                               4,
-                              "Containers",
+                              s.containers,
                               Icons.directions_boat_outlined,
                             ),
                             _buildMenuItem(
                               7,
-                              "Delivery",
+                              s.delivery,
                               Icons.local_shipping_outlined,
                             ),
 
                             // 3. CONTACTS
-                            _buildSidebarGroupTitle("CONTACTS"),
+                            _buildSidebarGroupTitle(s.contacts.toUpperCase()),
                             _buildMenuItem(
                               2,
-                              "Customers",
+                              s.customers,
                               Icons.people_outline,
                             ),
                             _buildMenuItem(
                               3,
-                              "Suppliers",
+                              s.suppliers,
                               Icons.business_outlined,
                             ),
 
                             // 4. FINANCE & INVENTORY
-                            _buildSidebarGroupTitle("FINANCE & INVENTORY"),
+                            _buildSidebarGroupTitle(s.financeAndInventory.toUpperCase()),
                             _buildMenuItem(
                               5,
-                              "Finance",
+                              s.finance,
                               Icons.account_balance_wallet_outlined,
                             ),
                             _buildMenuItem(
                               6,
-                              "Inventory",
+                              s.inventory,
                               Icons.inventory_2_outlined,
                             ),
 
@@ -137,21 +140,26 @@ class _MainLayoutState extends State<MainLayout> {
                             const Spacer(),
 
                             // 5. SUPER ADMIN (ตั้งค่าระบบ)
-                            _buildSidebarGroupTitle("SUPER ADMIN"),
+                            _buildSidebarGroupTitle(s.superAdmin.toUpperCase()),
                             _buildMenuItem(
                               9,
-                              "Settings",
+                              s.settings,
                               Icons.settings_outlined,
                             ),
 
                             // 6. OWNER (เจ้าของ)
-                            _buildSidebarGroupTitle("OWNER ONLY"),
+                            _buildSidebarGroupTitle(s.ownerOnly.toUpperCase()),
                             _buildMenuItem(
                               8,
-                              "Reports",
+                              s.reports,
                               Icons.bar_chart_rounded,
                             ),
 
+                            const SizedBox(height: 12),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16),
+                              child: LanguageSwitchButton(),
+                            ),
                             const SizedBox(height: 8),
                             _buildLogoutButton(context),
                           ],
@@ -191,6 +199,8 @@ class _MainLayoutState extends State<MainLayout> {
 
   // สร้าง Widget ปุ่ม Logout
   Widget _buildLogoutButton(BuildContext context) {
+    final s = S.of(context)!;
+
     return InkWell(
       onTap: () {
         showDialog(
@@ -199,17 +209,17 @@ class _MainLayoutState extends State<MainLayout> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(24),
             ),
-            title: const Text(
-              "Log Out",
-              style: TextStyle(fontWeight: FontWeight.bold),
+            title: Text(
+              s.logOut,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            content: const Text("คุณต้องการออกจากระบบใช่หรือไม่?"),
+            content: Text(s.logOutConfirm),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text(
-                  "ยกเลิก",
-                  style: TextStyle(color: Color(0xFF86868B)),
+                child: Text(
+                  s.cancel,
+                  style: const TextStyle(color: Color(0xFF86868B)),
                 ),
               ),
               ElevatedButton(
@@ -231,9 +241,9 @@ class _MainLayoutState extends State<MainLayout> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: const Text(
-                  "ออกจากระบบ",
-                  style: TextStyle(
+                child: Text(
+                  s.logOut,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
                   ),
@@ -252,12 +262,12 @@ class _MainLayoutState extends State<MainLayout> {
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
-          children: const [
-            Icon(Icons.logout_rounded, color: Color(0xFFD97781), size: 20),
-            SizedBox(width: 16),
+          children: [
+            const Icon(Icons.logout_rounded, color: Color(0xFFD97781), size: 20),
+            const SizedBox(width: 16),
             Text(
-              "Log Out",
-              style: TextStyle(
+              s.logOut,
+              style: const TextStyle(
                 color: Color(0xFFD97781),
                 fontWeight: FontWeight.w600,
               ),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../core/auth/auth_service.dart';
 import '../../shared/layouts/main_layout.dart';
+import '../../shared/widgets/language_switch_button.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -27,12 +29,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// เรียก API Login จริง
   Future<void> _handleLogin() async {
+    final s = S.of(context)!;
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
     // Validation
     if (email.isEmpty || password.isEmpty) {
-      setState(() => _errorMessage = 'กรุณากรอก Email และ Password');
+      setState(() => _errorMessage = s.loginValidation);
       return;
     }
 
@@ -65,6 +68,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context)!;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF7F9FC),
       body: Center(
@@ -87,11 +92,20 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Language switcher at top right
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: const [
+                    LanguageSwitchButton(isCompact: true),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
                 // Logo / Brand
-                const Center(
+                Center(
                   child: Text(
-                    "PPN GREAT",
-                    style: TextStyle(
+                    s.appTitle,
+                    style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.5,
@@ -100,14 +114,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                const Center(
+                Center(
                   child: Text(
-                    "Import Operation Platform",
+                    s.appSubtitle,
                     style:
-                        TextStyle(fontSize: 14, color: Color(0xFF86868B)),
+                        const TextStyle(fontSize: 14, color: Color(0xFF86868B)),
                   ),
                 ),
-                const SizedBox(height: 48),
+                const SizedBox(height: 40),
 
                 // Error Message
                 if (_errorMessage != null) ...[
@@ -142,7 +156,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // Email Field
                 _buildTextField(
-                  "Email / Username",
+                  s.emailUsername,
                   Icons.person_outline,
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -151,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 // Password Field
                 _buildTextField(
-                  "Password",
+                  s.password,
                   Icons.lock_outline,
                   controller: _passwordController,
                   isPassword: true,
@@ -182,9 +196,9 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: Color(0xFF1D1D1F),
                             ),
                           )
-                        : const Text(
-                            "Sign In",
-                            style: TextStyle(
+                        : Text(
+                            s.signIn,
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                               color: Color(0xFF1D1D1F),

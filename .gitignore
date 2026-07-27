@@ -65,8 +65,8 @@ PROGRESS.md
 *.user
 *.sln.docstates
 
-# Local docs (not pushed to GitHub)
-docs/
+# Local docs tracked for GitHub review
+# docs/
 
 # Playwright E2E generated artifacts
 /node_modules/
@@ -81,11 +81,13 @@ docs/
 /realistic-e2e-run.*.log
 /realistic-e2e-run.pid
 
-# Laravel files in Flutter workspace
-/.env
-/bootstrap/
-/storage/
-/vendor/
-/reports/
+# Laravel ppn-api folder ignore rules
+ppn-api/vendor/
+ppn-api/.env
+ppn-api/storage/*.log
+ppn-api/storage/framework/cache/*
+ppn-api/storage/framework/sessions/*
+ppn-api/storage/framework/views/*
+
 
 
